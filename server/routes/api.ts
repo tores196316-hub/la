@@ -4,6 +4,7 @@ import fs from 'fs';
 import { z } from 'zod';
 import { isValidYouTubeUrl, getCanonicalYouTubeUrl, isValidJobId, isSafePath } from '../utils/security.js';
 import { extractMetadata } from '../services/ytdlp.js';
+import { getFastYouTubeMetadata } from '../services/fastMeta.js';
 import { jobManager } from '../services/jobManager.js';
 import { getSystemDiagnostic } from '../services/systemChecker.js';
 
@@ -57,12 +58,29 @@ apiRouter.post('/analyze', async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const metadata = await extractMetadata(canonicalUrl);
-
-    res.json({
-      success: true,
-      data: metadata,
-    });
+    // Try primary yt-dlp metadata extraction
+    try {
+      const metadata = await extractMetadata(canonicalUrl);
+      res.json({
+        success: true,
+        data: metadata,
+      });
+      return;
+    } catch (primaryErr: any) {
+      console.warn('yt-dlp metadata failed, attempting fast oEmbed fallback:', primaryErr?.message);
+      
+      // Fallback to official YouTube oEmbed API
+      const fallbackMeta = await getFastYouTubeMetadata(canonicalUrl);
+      if (fallbackMeta) {
+        res.json({
+          success: true,
+          data: fallbackMeta,
+        });
+        return;
+      }
+      
+      throw primaryErr;
+    }
   } catch (err: any) {
     console.error('Video analiz hatası:', err);
     const message = err.message || 'Video bilgileri alınırken bir hata oluştu.';

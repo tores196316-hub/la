@@ -23,11 +23,11 @@ let lastCheckTime = 0;
 export async function findYtDlp(): Promise<{ path: string; version: string } | null> {
   const candidatePaths = [
     process.env.YT_DLP_PATH,
-    path.resolve(process.cwd(), 'bin', 'yt-dlp'),
-    path.resolve(process.cwd(), 'bin', 'yt-dlp.exe'),
     '/usr/local/bin/yt-dlp',
     '/usr/bin/yt-dlp',
     'yt-dlp',
+    path.resolve(process.cwd(), 'bin', 'yt-dlp'),
+    path.resolve(process.cwd(), 'bin', 'yt-dlp.exe'),
   ].filter(Boolean) as string[];
 
   for (const binPath of candidatePaths) {
@@ -53,10 +53,11 @@ export async function findYtDlp(): Promise<{ path: string; version: string } | n
 export async function findFfmpeg(): Promise<{ path: string; version: string } | null> {
   const candidatePaths = [
     process.env.FFMPEG_PATH,
-    path.resolve(process.cwd(), 'bin', 'ffmpeg'),
     '/usr/bin/ffmpeg',
     '/usr/local/bin/ffmpeg',
     'ffmpeg',
+    path.resolve(process.cwd(), 'bin', 'ffmpeg'),
+    path.resolve(process.cwd(), 'bin', 'ffmpeg.exe'),
   ].filter(Boolean) as string[];
 
   for (const binPath of candidatePaths) {

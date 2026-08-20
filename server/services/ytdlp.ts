@@ -400,9 +400,17 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
   ];
 
   return new Promise((resolve, reject) => {
+    const safeArgs = args.map((a) => (a.endsWith('.txt') ? '<cookies.txt>' : a));
+    console.log(`[YTDLP] Metadata extraction starting: ${ytdlp.path} ${safeArgs.join(' ')}`);
+
     const child = spawn(ytdlp.path, args, {
       timeout: 30000,
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PATH: `/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+        PYTHONUNBUFFERED: '1',
+      },
     });
 
     let stdoutData = '';
@@ -417,11 +425,13 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
     });
 
     child.on('error', (err) => {
+      console.error('[YTDLP] Spawn error:', err);
       reject(new Error(`yt-dlp başlatılamadı: ${err.message}`));
     });
 
     child.on('close', (code) => {
       if (code !== 0) {
+        console.error(`[YTDLP] Metadata process exited with code ${code}. Stderr:`, stderrData || stdoutData);
         const errorMsg = stderrData || stdoutData || 'Bilinmeyen analiz hatası';
         return reject(parseYtDlpError(errorMsg));
       }
@@ -651,9 +661,17 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
       stageMessage: 'Medya akışları bağlanıyor...',
     });
 
+    const safeArgs = args.map((a) => (a.endsWith('.txt') ? '<cookies.txt>' : a));
+    console.log(`[YTDLP] Media download starting: ${ytdlp.path} ${safeArgs.join(' ')}`);
+
     const child = spawn(ytdlp.path, args, {
       timeout: 10 * 60 * 1000,
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PATH: `/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+        PYTHONUNBUFFERED: '1',
+      },
     });
 
     let stderrData = '';

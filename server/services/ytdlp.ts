@@ -289,8 +289,29 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
         const info = JSON.parse(stdoutData);
         const duration = typeof info.duration === 'number' ? info.duration : 0;
         
+        const rawFormats: any[] = Array.isArray(info?.formats) ? info.formats : [];
+
+        // Debug logging for raw formats from yt-dlp
+        console.log('[YTDLP RAW FORMAT COUNT]', rawFormats.length);
+        for (const f of rawFormats) {
+          console.log('[YTDLP FORMAT DEBUG]', JSON.stringify({
+            format_id: f.format_id,
+            format: f.format,
+            ext: f.ext,
+            height: f.height,
+            width: f.width,
+            resolution: f.resolution,
+            format_note: f.format_note,
+            vcodec: f.vcodec,
+            acodec: f.acodec,
+            filesize: f.filesize,
+            filesize_approx: f.filesize_approx,
+          }));
+        }
+
         // Extract all available video resolutions (including video-only DASH streams)
         const detectedHeights = extractAvailableResolutions(info);
+        console.log('[YTDLP DETECTED RESOLUTIONS]', JSON.stringify(detectedHeights));
         const maxHeight = detectedHeights.length > 0 ? Math.max(...detectedHeights) : (info.height || 720);
 
         // Determine available video options based on stream availability

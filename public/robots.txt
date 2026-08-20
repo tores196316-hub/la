@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/download/
+
+Sitemap: https://imgivo.app/sitemap.xml

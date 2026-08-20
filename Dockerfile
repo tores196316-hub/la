@@ -25,7 +25,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install npm dependencies
-RUN npm ci --include=dev
+RUN npm install
 
 # Copy project files
 COPY . .

@@ -128,9 +128,6 @@ export function getNodeExecutablePath(): string {
 export function buildBaseYtDlpArgs(): string[] {
   const nodePath = getNodeExecutablePath();
 
-  const extractorArgs =
-    process.env.YTDLP_EXTRACTOR_ARGS || 'youtube:player_client=web,android,ios';
-
   const args: string[] = [
     '--no-warnings',
     '--no-playlist',
@@ -140,9 +137,6 @@ export function buildBaseYtDlpArgs(): string[] {
     // Explicit JavaScript Runtime configuration for yt-dlp & yt-dlp-ejs
     '--js-runtimes',
     `node:${nodePath}`,
-    // YouTube player client priority
-    '--extractor-args',
-    extractorArgs,
   ];
 
   // Configure optional proxy if provided via env

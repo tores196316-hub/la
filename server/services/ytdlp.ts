@@ -230,7 +230,6 @@ export function getNodeExecutablePath(): string {
 
 /**
  * Builds base yt-dlp arguments including multi-client fallbacks, JavaScript runtime, proxy & cookies.
- * Uses ios, android, web_safari, mweb clients and standard desktop user agent to avoid bot checks.
  */
 export function buildBaseYtDlpArgs(): string[] {
   const nodePath = getNodeExecutablePath();
@@ -239,12 +238,7 @@ export function buildBaseYtDlpArgs(): string[] {
     '--no-warnings',
     '--no-playlist',
     '--no-check-certificates',
-    // Multi-client extractor arguments to bypass bot verification across YouTube players
-    '--extractor-args',
-    'youtube:player_client=ios,android,web_safari,mweb,web',
-    '--user-agent',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    // Explicit JavaScript Runtime configuration for yt-dlp & yt-dlp-ejs
+    // Explicit JavaScript Runtime configuration for yt-dlp & yt-dlp-ejs challenge solvers
     '--js-runtimes',
     `node:${nodePath}`,
   ];
@@ -266,6 +260,14 @@ export function buildBaseYtDlpArgs(): string[] {
   if (cookiePath) {
     args.push('--cookies', cookiePath);
     console.log(`[AUTH] Cookie dosyası yt-dlp komutuna uygulandı (${cookiePath}).`);
+  } else {
+    // When no cookies are present, use multi-client fallbacks to mitigate bot checks
+    args.push(
+      '--extractor-args',
+      'youtube:player_client=tv,web_safari,mweb',
+      '--user-agent',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+    );
   }
 
   return args;

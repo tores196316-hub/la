@@ -239,8 +239,13 @@ export default function App() {
     handleAnalyze(item.url);
   };
 
+  const hasActiveResult = Boolean(metadata || jobData);
+
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white">
+    <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white relative overflow-x-hidden">
+      {/* Background ambient lighting accents */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-b from-cyan-500/10 via-blue-600/5 to-transparent blur-3xl pointer-events-none -z-10" />
+
       {/* Top Navigation */}
       <Header
         activeTab={activeTab}
@@ -249,7 +254,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-8 z-0">
         {activeTab === 'converter' && (
           <div className="space-y-6">
             {/* 1. URL Input */}
@@ -259,6 +264,7 @@ export default function App() {
               onAnalyze={handleAnalyze}
               isLoading={isAnalyzing}
               error={error}
+              hasActiveResult={hasActiveResult}
             />
 
             {/* 2. Format Selection Card (When analyzed & not started yet) */}
@@ -275,7 +281,14 @@ export default function App() {
             {jobData && jobData.state !== 'completed' && (
               <JobProgressCard
                 jobData={jobData}
-                onRetry={() => metadata && handleStartConversion(metadata.availableFormats[0])}
+                onRetry={() => {
+                  if (metadata && metadata.availableFormats.length > 0) {
+                    const matchedFormat = metadata.availableFormats.find(f => f.format === jobData.format && f.quality === jobData.quality) || metadata.availableFormats[0];
+                    handleStartConversion(matchedFormat);
+                  } else {
+                    handleAnalyze();
+                  }
+                }}
               />
             )}
 

@@ -15,6 +15,7 @@ import {
   Clock,
   Layers,
 } from 'lucide-react';
+import { saveUserToFirestore } from '../firebase/firebase';
 
 export function PremiumPage() {
   const { navigate } = useRouter();
@@ -40,35 +41,40 @@ export function PremiumPage() {
     setIsActivating(true);
 
     try {
-      // In demo mode or if user tests it, call server endpoint to grant demo premium if admin or simulate
-      // We can also trigger server admin endpoint if available or update locally
-      const res = await fetch(`/api/admin/users/${user.id}/premium`, {
+      const now = Date.now();
+      const addedMs =
+        billingCycle === 'yearly' ? 365 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
+      const baseTime =
+        user.premiumExpiresAt && user.premiumExpiresAt > now ? user.premiumExpiresAt : now;
+      const newExpiry = baseTime + addedMs;
+
+      // Update in Firestore
+      await saveUserToFirestore(user.id, {
+        plan: selectedPlan,
+        premiumActive: true,
+        premiumStartedAt: user.premiumStartedAt || now,
+        premiumExpiresAt: newExpiry,
+        email: user.email,
+      });
+
+      // Also trigger backend proxy if available
+      fetch(`/api/admin/users/${user.id}/premium`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('imgivo_auth_token_v1') || ''}`,
+          Authorization: `Bearer ${localStorage.getItem('imgivo_auth_token_v2') || ''}`,
         },
         body: JSON.stringify({
           plan: selectedPlan,
           months: billingCycle === 'yearly' ? 12 : 1,
         }),
-      });
+      }).catch(() => {});
 
-      if (res.ok) {
-        await refreshUser();
-        setDemoSuccess(true);
-        setTimeout(() => {
-          setDemoModalOpen(false);
-          navigate('/profil');
-        }, 1500);
-      } else {
-        // If not admin, simulate success for demo experience
-        setDemoSuccess(true);
-        setTimeout(() => {
-          setDemoModalOpen(false);
-          navigate('/profil');
-        }, 1500);
-      }
+      setDemoSuccess(true);
+      setTimeout(() => {
+        setDemoModalOpen(false);
+        navigate('/profil');
+      }, 1500);
     } catch {
       setDemoSuccess(true);
       setTimeout(() => {

@@ -15,6 +15,10 @@ import {
   ArrowRight,
   DownloadCloud,
 } from 'lucide-react';
+import {
+  subscribeToUserHistory,
+  clearUserHistoryInFirestore,
+} from '../firebase/firebase';
 
 interface HistoryPageProps {
   onSelectHistoryItem?: (item: HistoryItem) => void;
@@ -29,42 +33,50 @@ export function HistoryPage({ onSelectHistoryItem }: HistoryPageProps) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
-    const loadHistory = async () => {
-      setIsLoading(true);
-      try {
-        if (user) {
-          // Fetch authenticated history from server
-          const res = await authFetch('/api/user/history');
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && Array.isArray(data.data)) {
-              setItems(data.data);
-              return;
-            }
-          }
-        }
+    setIsLoading(true);
 
-        // Fallback to local storage
+    if (user?.id) {
+      // Real-time Firestore history subscription for authenticated user
+      const unsubscribe = subscribeToUserHistory(
+        user.id,
+        (liveItems) => {
+          setItems(liveItems);
+          setIsLoading(false);
+        },
+        () => {
+          // If Firestore fails, fallback to local storage
+          const saved = localStorage.getItem('imgivo_history_v1');
+          if (saved) {
+            try {
+              setItems(JSON.parse(saved));
+            } catch {}
+          }
+          setIsLoading(false);
+        }
+      );
+
+      return () => {
+        unsubscribe();
+      };
+    } else {
+      // Local storage for guest
+      try {
         const saved = localStorage.getItem('imgivo_history_v1');
         if (saved) {
           setItems(JSON.parse(saved));
         } else {
           setItems([]);
         }
-      } catch {
-        // Handle error silently
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadHistory();
-  }, [user, authFetch]);
+      } catch {}
+      setIsLoading(false);
+    }
+  }, [user]);
 
   const handleClearHistory = async () => {
     try {
-      if (user) {
-        await authFetch('/api/user/history', { method: 'DELETE' });
+      if (user?.id) {
+        await clearUserHistoryInFirestore(user.id);
+        authFetch('/api/user/history', { method: 'DELETE' }).catch(() => {});
       }
       localStorage.removeItem('imgivo_history_v1');
       setItems([]);
@@ -106,7 +118,7 @@ export function HistoryPage({ onSelectHistoryItem }: HistoryPageProps) {
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight">İndirme Geçmişim</h1>
             <p className="text-xs text-slate-400">
-              {user ? `Hesabınıza (@${user.username}) ait kayıtlar` : 'Tarayıcınıza ait yerel geçmiş'}
+              {user ? `Hesabınıza (@${user.username}) ait bulut ve yerel kayıtlar` : 'Tarayıcınıza ait yerel geçmiş'}
             </p>
           </div>
         </div>

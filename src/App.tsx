@@ -23,6 +23,7 @@ import { FaqPage } from './pages/FaqPage';
 import { AdminPage } from './pages/AdminPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
+import { addHistoryRecordToFirestore } from './firebase/firebase';
 import { VideoMetadata, VideoFormatOption, JobData, HistoryItem, SystemHealth } from './types';
 
 const STORAGE_KEY = 'imgivo_history_v1';
@@ -121,7 +122,10 @@ function AppContent() {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered.slice(0, 30)));
               } catch {}
 
-              // 2. If authenticated, save to backend user history
+              // 2. If authenticated, save to Firestore & backend user history
+              if (user?.id) {
+                addHistoryRecordToFirestore(user.id, record).catch(() => {});
+              }
               if (token) {
                 authFetch('/api/user/history', {
                   method: 'POST',

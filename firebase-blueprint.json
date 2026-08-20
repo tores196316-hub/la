@@ -1,0 +1,168 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, membership plan and access role details",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the user",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the user",
+          "maxLength": 100
+        },
+        "username": {
+          "type": "string",
+          "description": "Unique username handle",
+          "maxLength": 50
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address",
+          "maxLength": 150
+        },
+        "role": {
+          "type": "string",
+          "description": "System role: user or admin",
+          "enum": ["user", "admin"]
+        },
+        "plan": {
+          "type": "string",
+          "description": "Subscription tier: free, premium, or premium_plus",
+          "enum": ["free", "premium", "premium_plus"]
+        },
+        "premiumActive": {
+          "type": "boolean",
+          "description": "Whether premium benefits are active"
+        },
+        "premiumExpiresAt": {
+          "type": "number",
+          "description": "Timestamp in milliseconds when premium access expires"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Account creation timestamp"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["id", "email", "role", "plan", "premiumActive", "createdAt"]
+    },
+    "HistoryItem": {
+      "title": "HistoryItem",
+      "description": "User download and conversion history item",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique ID of history record",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "jobId": {
+          "type": "string",
+          "description": "Associated job ID",
+          "maxLength": 128
+        },
+        "url": {
+          "type": "string",
+          "description": "Source YouTube URL",
+          "maxLength": 500
+        },
+        "title": {
+          "type": "string",
+          "description": "Media title",
+          "maxLength": 300
+        },
+        "thumbnail": {
+          "type": "string",
+          "description": "Video thumbnail image URL",
+          "maxLength": 500
+        },
+        "format": {
+          "type": "string",
+          "description": "Target format (mp4, mp3, m4a)",
+          "maxLength": 20
+        },
+        "quality": {
+          "type": "string",
+          "description": "Target resolution or audio bitrate",
+          "maxLength": 50
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Timestamp when conversion was executed"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the job",
+          "enum": ["completed", "failed"]
+        }
+      },
+      "required": ["id", "userId", "jobId", "url", "title", "format", "quality", "timestamp", "status"]
+    },
+    "SystemStats": {
+      "title": "SystemStats",
+      "description": "Aggregated platform metrics and analytics",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document ID, usually 'global'",
+          "maxLength": 64
+        },
+        "totalConversions": {
+          "type": "number",
+          "description": "Total count of processed conversions"
+        },
+        "successfulConversions": {
+          "type": "number",
+          "description": "Successful conversions count"
+        },
+        "failedConversions": {
+          "type": "number",
+          "description": "Failed conversions count"
+        },
+        "todayConversions": {
+          "type": "number",
+          "description": "Count of conversions performed today"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Last updated timestamp"
+        }
+      },
+      "required": ["id", "totalConversions", "successfulConversions", "failedConversions"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores user profiles, subscriptions, and roles"
+    },
+    "/users/{userId}/history/{historyId}": {
+      "schema": {
+        "$ref": "#/entities/HistoryItem"
+      },
+      "description": "Stores conversion history specific to a user"
+    },
+    "/stats/{statsId}": {
+      "schema": {
+        "$ref": "#/entities/SystemStats"
+      },
+      "description": "Stores platform metrics and live conversion counts"
+    }
+  }
+}

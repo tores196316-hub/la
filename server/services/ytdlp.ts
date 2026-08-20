@@ -37,7 +37,8 @@ export function formatBytes(bytes?: number): string {
 
 /**
  * Resolves optional cookie file path from environment variables safely.
- * Supports YTDLP_COOKIES_BASE64, YTDLP_COOKIE_CONTENT, YTDLP_COOKIES, and YTDLP_COOKIES_PATH.
+ * Supports YTDLP_COOKIES_BASE64, YTDLP_COOKIE_CONTENT, YTDLP_COOKIES, and YTDLP_COOKIES_PATH,
+ * as well as candidate files in /app/tmp/cookies.txt, ./tmp/cookies.txt, /tmp/cookies.txt.
  */
 export function getResolvedCookiePath(): string | null {
   const customPath = process.env.YTDLP_COOKIES_PATH;
@@ -93,13 +94,23 @@ export function getResolvedCookiePath(): string | null {
     }
   }
 
-  // Fallback to pre-existing cookie file on disk if valid
-  if (fs.existsSync(defaultCookieFile)) {
-    try {
-      const stats = fs.statSync(defaultCookieFile);
-      if (stats.size > 10) return defaultCookieFile;
-    } catch {
-      // ignore
+  // Check all candidate cookie file locations on disk
+  const candidatePaths = [
+    '/app/tmp/cookies.txt',
+    defaultCookieFile,
+    '/tmp/cookies.txt',
+    path.resolve(process.cwd(), 'cookies.txt'),
+    '/app/cookies.txt',
+  ];
+
+  for (const cPath of candidatePaths) {
+    if (fs.existsSync(cPath)) {
+      try {
+        const stats = fs.statSync(cPath);
+        if (stats.size > 10) return cPath;
+      } catch {
+        // ignore
+      }
     }
   }
 
@@ -123,7 +134,8 @@ export function getNodeExecutablePath(): string {
 }
 
 /**
- * Builds base yt-dlp arguments including JavaScript runtime, anti-blocking, proxy & cookies.
+ * Builds base yt-dlp arguments including JavaScript runtime, proxy & cookies.
+ * Matches manual Railway-tested command without bot-triggering headers.
  */
 export function buildBaseYtDlpArgs(): string[] {
   const nodePath = getNodeExecutablePath();
@@ -132,8 +144,6 @@ export function buildBaseYtDlpArgs(): string[] {
     '--no-warnings',
     '--no-playlist',
     '--no-check-certificates',
-    '--force-ipv4',
-    '--geo-bypass',
     // Explicit JavaScript Runtime configuration for yt-dlp & yt-dlp-ejs
     '--js-runtimes',
     `node:${nodePath}`,
@@ -328,27 +338,8 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
         
         const rawFormats: any[] = Array.isArray(info?.formats) ? info.formats : [];
 
-        // Debug logging for raw formats from yt-dlp
-        console.log('[YTDLP RAW FORMAT COUNT]', rawFormats.length);
-        for (const f of rawFormats) {
-          console.log('[YTDLP FORMAT DEBUG]', JSON.stringify({
-            format_id: f.format_id,
-            format: f.format,
-            ext: f.ext,
-            height: f.height,
-            width: f.width,
-            resolution: f.resolution,
-            format_note: f.format_note,
-            vcodec: f.vcodec,
-            acodec: f.acodec,
-            filesize: f.filesize,
-            filesize_approx: f.filesize_approx,
-          }));
-        }
-
         // Extract all available video resolutions (including video-only DASH streams)
         const detectedHeights = extractAvailableResolutions(info);
-        console.log('[YTDLP DETECTED RESOLUTIONS]', JSON.stringify(detectedHeights));
         const maxHeight = detectedHeights.length > 0 ? Math.max(...detectedHeights) : (info.height || 720);
 
         // Determine available video options based on stream availability

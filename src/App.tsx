@@ -4,21 +4,33 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { RouterProvider, useRouter } from './context/RouterContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
 import { UrlInputSection } from './components/UrlInputSection';
 import { VideoPreviewCard } from './components/VideoPreviewCard';
 import { JobProgressCard } from './components/JobProgressCard';
 import { DownloadReadyCard } from './components/DownloadReadyCard';
-import { HistorySection } from './components/HistorySection';
-import { AdminStatsModal } from './components/AdminStatsModal';
-import { FaqSection } from './components/FaqSection';
 import { Footer } from './components/Footer';
+
+// Pages
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { PremiumPage } from './pages/PremiumPage';
+import { HistoryPage } from './pages/HistoryPage';
+import { FaqPage } from './pages/FaqPage';
+import { AdminPage } from './pages/AdminPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+
 import { VideoMetadata, VideoFormatOption, JobData, HistoryItem, SystemHealth } from './types';
 
 const STORAGE_KEY = 'imgivo_history_v1';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState<'converter' | 'history' | 'admin' | 'faq'>('converter');
+function AppContent() {
+  const { path, navigate } = useRouter();
+  const { user, token, authFetch } = useAuth();
+
   const [url, setUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isStartingConversion, setIsStartingConversion] = useState(false);
@@ -26,18 +38,10 @@ export default function App() {
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch initial system health
+  // Fetch system health on mount
   useEffect(() => {
     const fetchHealth = async () => {
       try {
@@ -47,20 +51,11 @@ export default function App() {
           setSystemHealth(data);
         }
       } catch {
-        // System offline or booting
+        // Ignore
       }
     };
     fetchHealth();
   }, []);
-
-  // Save history to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-    } catch {
-      // Ignore storage errors
-    }
-  }, [history]);
 
   // Clean up polling timer
   const stopPolling = () => {
@@ -100,34 +95,46 @@ export default function App() {
           if (data.success && data.job) {
             setJobData(data.job);
 
-            // If job just completed, save to history
+            // If job just completed, save to user history & localStorage
             if (data.job.state === 'completed') {
               stopPolling();
-              setHistory((prev) => {
-                const existingIdx = prev.findIndex((h) => h.jobId === data.job.jobId);
-                const item: HistoryItem = {
-                  id: `${data.job.jobId}_${Date.now()}`,
-                  jobId: data.job.jobId,
-                  url: url,
-                  title: data.job.title,
-                  thumbnail: data.job.thumbnail,
-                  format: data.job.format,
-                  quality: data.job.quality,
-                  timestamp: Date.now(),
-                };
-                if (existingIdx >= 0) {
-                  const updated = [...prev];
-                  updated[existingIdx] = item;
-                  return updated;
-                }
-                return [item, ...prev.slice(0, 24)];
-              });
+
+              const record: HistoryItem = {
+                id: `${data.job.jobId}_${Date.now()}`,
+                jobId: data.job.jobId,
+                url: url,
+                title: data.job.title,
+                thumbnail: data.job.thumbnail,
+                format: data.job.format,
+                quality: data.job.quality,
+                timestamp: Date.now(),
+                fileSizeBytes: data.job.fileSizeBytes,
+                status: 'completed',
+              };
+
+              // 1. Save to local storage for quick access
+              try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                const list: HistoryItem[] = saved ? JSON.parse(saved) : [];
+                const filtered = list.filter((i) => i.jobId !== data.job.jobId);
+                filtered.unshift(record);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered.slice(0, 30)));
+              } catch {}
+
+              // 2. If authenticated, save to backend user history
+              if (token) {
+                authFetch('/api/user/history', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(record),
+                }).catch(() => {});
+              }
             } else if (data.job.state === 'failed' || data.job.state === 'expired') {
               stopPolling();
             }
           }
         } catch (err: any) {
-          // Keep polling or mark error if network issue
+          // Keep polling or continue
         }
       }, 1000);
     } else {
@@ -135,7 +142,7 @@ export default function App() {
     }
 
     return () => stopPolling();
-  }, [jobData?.jobId, jobData?.state, url]);
+  }, [jobData?.jobId, jobData?.state, url, token, authFetch]);
 
   // Handle URL Analysis
   const handleAnalyze = async (overrideUrl?: string) => {
@@ -175,9 +182,16 @@ export default function App() {
     setIsStartingConversion(true);
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/download', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           url: metadata.url,
           format: formatOption.format,
@@ -189,6 +203,11 @@ export default function App() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (data.requiresPremium) {
+          setError('2K ve 4K indirmeler IMGIVO Premium üyelerine özeldir.');
+          navigate('/premium');
+          return;
+        }
         throw new Error(data.error || 'Dönüştürme başlatılamadı.');
       }
 
@@ -224,38 +243,20 @@ export default function App() {
     setUrl('');
   };
 
-  const handleClearHistory = () => {
-    setHistory([]);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Ignore
-    }
-  };
-
   const handleSelectHistoryItem = (item: HistoryItem) => {
-    setActiveTab('converter');
+    navigate('/');
     setUrl(item.url);
     handleAnalyze(item.url);
   };
 
   const hasActiveResult = Boolean(metadata || jobData);
 
-  return (
-    <div className="min-h-screen bg-[#08090c] text-slate-100 flex flex-col selection:bg-slate-700 selection:text-white relative overflow-x-hidden">
-      {/* Background ambient lighting accents - subtle, clean */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[700px] h-[220px] bg-slate-800/10 blur-[100px] pointer-events-none -z-10" />
-
-      {/* Top Navigation */}
-      <Header
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        systemHealth={systemHealth}
-      />
-
-      {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-8 z-0">
-        {activeTab === 'converter' && (
+  // Router Dispatcher
+  const renderRouteContent = () => {
+    switch (path) {
+      case '/':
+      case '':
+        return (
           <div className="space-y-6">
             {/* 1. URL Input */}
             <UrlInputSection
@@ -283,7 +284,10 @@ export default function App() {
                 jobData={jobData}
                 onRetry={() => {
                   if (metadata && metadata.availableFormats.length > 0) {
-                    const matchedFormat = metadata.availableFormats.find(f => f.format === jobData.format && f.quality === jobData.quality) || metadata.availableFormats[0];
+                    const matchedFormat =
+                      metadata.availableFormats.find(
+                        (f) => f.format === jobData.format && f.quality === jobData.quality
+                      ) || metadata.availableFormats[0];
                     handleStartConversion(matchedFormat);
                   } else {
                     handleAnalyze();
@@ -294,31 +298,62 @@ export default function App() {
 
             {/* 4. Ready / Download Card (When completed) */}
             {jobData && jobData.state === 'completed' && (
-              <DownloadReadyCard
-                jobData={jobData}
-                onNewConversion={handleReset}
-              />
+              <DownloadReadyCard jobData={jobData} onNewConversion={handleReset} />
             )}
           </div>
-        )}
+        );
 
-        {activeTab === 'history' && (
-          <HistorySection
-            history={history}
-            onClearHistory={handleClearHistory}
-            onSelectHistoryItem={handleSelectHistoryItem}
-          />
-        )}
+      case '/giris':
+        return <LoginPage />;
 
-        {activeTab === 'admin' && (
-          <AdminStatsModal onClose={() => setActiveTab('converter')} />
-        )}
+      case '/kayit':
+        return <RegisterPage />;
 
-        {activeTab === 'faq' && <FaqSection />}
+      case '/profil':
+        return <ProfilePage />;
+
+      case '/premium':
+        return <PremiumPage />;
+
+      case '/gecmis':
+        return <HistoryPage onSelectHistoryItem={handleSelectHistoryItem} />;
+
+      case '/yardim':
+        return <FaqPage />;
+
+      case '/admin':
+        return <AdminPage />;
+
+      default:
+        return <NotFoundPage />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#08090c] text-slate-100 flex flex-col selection:bg-slate-700 selection:text-white relative overflow-x-hidden">
+      {/* Background ambient lighting accents - subtle, clean */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[700px] h-[220px] bg-slate-800/10 blur-[100px] pointer-events-none -z-10" />
+
+      {/* Top Navigation */}
+      <Header systemHealth={systemHealth} />
+
+      {/* Main Content Area */}
+      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-8 z-0">
+        {renderRouteContent()}
       </main>
 
       {/* Footer */}
-      <Footer setActiveTab={setActiveTab} />
+      <Footer />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <RouterProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </RouterProvider>
   );
 }

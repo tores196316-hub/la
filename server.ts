@@ -7,6 +7,7 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { apiRouter } from './server/routes/api.js';
+import { authRouter } from './server/routes/authRoutes.js';
 import { getSystemDiagnostic } from './server/services/systemChecker.js';
 import { jobManager } from './server/services/jobManager.js';
 import { getResolvedCookiePath } from './server/services/ytdlp.js';
@@ -58,6 +59,7 @@ const limiter = rateLimit({
 });
 
 app.use('/api', limiter);
+app.use('/api', authRouter);
 app.use('/api', apiRouter);
 
 // Setup frontend serving

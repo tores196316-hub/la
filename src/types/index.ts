@@ -107,4 +107,49 @@ export interface HistoryItem {
   quality: string;
   timestamp: number;
   fileSize?: string;
+  fileSizeBytes?: number;
+  status?: 'completed' | 'processing' | 'failed';
 }
+
+export type UserRole = 'user' | 'admin';
+export type UserPlan = 'free' | 'premium' | 'premium_plus';
+
+export interface User {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  role: UserRole;
+  plan: UserPlan;
+  premiumActive: boolean;
+  premiumStartedAt: number | null;
+  premiumExpiresAt: number | null;
+  remainingDays: number | null;
+  remainingFormatted: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AdminDashboardData {
+  users: {
+    totalUsers: number;
+    activePremiumUsers: number;
+    expiredPremiumUsers: number;
+    todayUsers: number;
+  };
+  conversions: {
+    total: number;
+    successful: number;
+    failed: number;
+    today: number;
+    activeJobs: number;
+    formatPopularity: Record<string, number>;
+  };
+  system: {
+    ytdlpVersion: string | null;
+    ffmpegAvailable: boolean;
+    tempStorageUsedMb: number;
+    uptimeSeconds: number;
+  };
+}
+

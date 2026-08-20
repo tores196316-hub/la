@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { VideoMetadata, VideoFormatOption } from '../types';
-import { Film, Music, Check, ArrowRight, Clock, Eye, User, Loader2 } from 'lucide-react';
+import { Film, Music, Check, ArrowRight, Clock, Eye, User, Loader2, Crown, Lock } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useRouter } from '../context/RouterContext';
 
 interface VideoPreviewCardProps {
   metadata: VideoMetadata;
@@ -15,7 +17,10 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
   onReset,
   isSubmitting,
 }) => {
+  const { isPremium } = useAuth();
+  const { navigate } = useRouter();
   const [activeType, setActiveType] = useState<'video' | 'audio'>('video');
+  const [premiumPrompt, setPremiumPrompt] = useState<string | null>(null);
   
   // Filter formats strictly from backend availableFormats
   const formatsForType = metadata.availableFormats.filter((f) => f.type === activeType);
@@ -37,10 +42,21 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
 
   const selectedFormat = formatsForType.find((f) => f.id === selectedFormatId) || formatsForType[0] || metadata.availableFormats[0];
 
+  const isUltraQuality = (opt: VideoFormatOption) => {
+    const q = opt.quality.toLowerCase();
+    const lbl = opt.label.toLowerCase();
+    return q.includes('2160') || q.includes('4k') || lbl.includes('4k') || q.includes('1440') || q.includes('2k') || lbl.includes('2k');
+  };
+
   const handleConvertClick = () => {
-    if (selectedFormat && !isSubmitting) {
-      onStartConversion(selectedFormat);
+    if (!selectedFormat || isSubmitting) return;
+
+    if (isUltraQuality(selectedFormat) && !isPremium) {
+      setPremiumPrompt('2K ve 4K indirmeler IMGIVO Premium üyelerine özeldir.');
+      return;
     }
+
+    onStartConversion(selectedFormat);
   };
 
   // Helper to badge resolutions cleanly
@@ -49,15 +65,17 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
     const lbl = option.label.toLowerCase();
     if (q.includes('2160') || q.includes('4k') || lbl.includes('4k')) {
       return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-white/10 text-white">
-          4K
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-400/15 border border-amber-400/30 text-amber-300 flex items-center gap-1">
+          <Crown className="w-2.5 h-2.5" />
+          4K UHD
         </span>
       );
     }
     if (q.includes('1440') || q.includes('2k') || lbl.includes('2k')) {
       return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-white/10 text-white">
-          2K
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-400/15 border border-amber-400/30 text-amber-300 flex items-center gap-1">
+          <Crown className="w-2.5 h-2.5" />
+          2K QHD
         </span>
       );
     }
@@ -130,6 +148,22 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
       </div>
 
       {/* Format Selector Section */}
+      {premiumPrompt && (
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-left">
+          <div className="flex items-center gap-2">
+            <Crown className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{premiumPrompt}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/premium')}
+            className="px-3 py-1 rounded bg-amber-400 text-black font-bold text-xs hover:bg-amber-300 transition-colors whitespace-nowrap cursor-pointer"
+          >
+            Premium'u İncele
+          </button>
+        </div>
+      )}
+
       <div className="space-y-3.5 pt-3.5 border-t border-white/[0.07]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
           <div className="text-left">

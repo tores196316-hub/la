@@ -7,6 +7,7 @@ import { extractMetadata, getResolvedCookiePath, saveRuntimeCookieContent } from
 import { getFastYouTubeMetadata } from '../services/fastMeta.js';
 import { jobManager } from '../services/jobManager.js';
 import { getSystemDiagnostic } from '../services/systemChecker.js';
+import { userService } from '../services/userService.js';
 
 export const apiRouter = Router();
 
@@ -123,6 +124,22 @@ apiRouter.post('/download', async (req: Request, res: Response): Promise<void> =
         error: 'Geçerli bir video bağlantısı gir.',
       });
       return;
+    }
+
+    // 2K (1440p) and 4K (2160p) Premium authorization guard
+    const isUltraQuality = quality === '1440p' || quality === '2160p' || quality === '4k' || quality.includes('1440') || quality.includes('2160');
+    if (isUltraQuality) {
+      const authUser = userService.verifyToken(req.headers.authorization);
+      const isPremiumActive = authUser && authUser.plan !== 'free' && (!authUser.premiumExpiresAt || authUser.premiumExpiresAt > Date.now());
+      
+      if (!isPremiumActive) {
+        res.status(403).json({
+          success: false,
+          error: '2K ve 4K indirmeler IMGIVO Premium üyelerine özeldir. Lütfen paketinizi yükseltin.',
+          requiresPremium: true,
+        });
+        return;
+      }
     }
 
     const isAudio = format === 'mp3' || format === 'm4a';

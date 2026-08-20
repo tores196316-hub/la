@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, Link } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
+import { PricingSettings, DEFAULT_PRICING } from '../types';
 import {
   Crown,
   Check,
@@ -15,7 +16,7 @@ import {
   Clock,
   Layers,
 } from 'lucide-react';
-import { saveUserToFirestore } from '../firebase/firebase';
+import { saveUserToFirestore, subscribeToPricingSettings } from '../firebase/firebase';
 
 export function PremiumPage() {
   const { navigate } = useRouter();
@@ -25,6 +26,25 @@ export function PremiumPage() {
   const [selectedPlan, setSelectedPlan] = useState<'premium' | 'premium_plus'>('premium');
   const [isActivating, setIsActivating] = useState(false);
   const [demoSuccess, setDemoSuccess] = useState(false);
+
+  // Dynamic Live Pricing from Firestore
+  const [pricing, setPricing] = useState<PricingSettings>(DEFAULT_PRICING);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToPricingSettings((livePricing) => {
+      setPricing(livePricing);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Calculate pricing values
+  const premiumMonthly = pricing.premiumMonthly;
+  const premiumDiscount = pricing.premiumDiscountPercent;
+  const premiumYearlyPerMonth = Math.round(premiumMonthly * (1 - premiumDiscount / 100));
+
+  const plusMonthly = pricing.premiumPlusMonthly;
+  const plusDiscount = pricing.premiumPlusDiscountPercent;
+  const plusYearlyPerMonth = Math.round(plusMonthly * (1 - plusDiscount / 100));
 
   const handleOpenDemoModal = (plan: 'premium' | 'premium_plus') => {
     if (!user) {
@@ -125,7 +145,7 @@ export function PremiumPage() {
           >
             <span>Yıllık Plan</span>
             <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
-              %30 Tasarruf
+              %{premiumDiscount} Tasarruf
             </span>
           </button>
         </div>
@@ -194,11 +214,13 @@ export function PremiumPage() {
 
             <div className="flex items-baseline gap-1">
               <span className="text-3xl font-extrabold text-white font-mono">
-                {billingCycle === 'yearly' ? '₺49' : '₺69'}
+                {billingCycle === 'yearly' ? `₺${premiumYearlyPerMonth}` : `₺${premiumMonthly}`}
               </span>
               <span className="text-xs text-slate-400">/ay</span>
               {billingCycle === 'yearly' && (
-                <span className="ml-2 text-[10px] text-amber-300 font-medium">Yıllık faturalandırılır</span>
+                <span className="ml-2 text-[10px] text-amber-300 font-medium">
+                  Yıllık faturalandırılır (₺{premiumYearlyPerMonth * 12}/yıl)
+                </span>
               )}
             </div>
 
@@ -256,9 +278,14 @@ export function PremiumPage() {
 
             <div className="flex items-baseline gap-1">
               <span className="text-3xl font-extrabold text-white font-mono">
-                {billingCycle === 'yearly' ? '₺89' : '₺119'}
+                {billingCycle === 'yearly' ? `₺${plusYearlyPerMonth}` : `₺${plusMonthly}`}
               </span>
               <span className="text-xs text-slate-400">/ay</span>
+              {billingCycle === 'yearly' && (
+                <span className="ml-2 text-[10px] text-purple-300 font-medium">
+                  Yıllık faturalandırılır (₺{plusYearlyPerMonth * 12}/yıl)
+                </span>
+              )}
             </div>
 
             <div className="pt-4 border-t border-white/[0.06] space-y-2.5">

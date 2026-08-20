@@ -646,6 +646,7 @@ export interface DownloadMediaOptions {
   outputDir: string;
   isPremium?: boolean;
   userPlan?: 'free' | 'premium' | 'premium_plus';
+  freeLimitRate?: string;
   onProgress?: (progress: {
     percentage: number;
     stage: 'queued' | 'downloading' | 'converting' | 'packaging' | 'ready';
@@ -666,7 +667,7 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
   fileName: string;
   fileSizeBytes: number;
 }> {
-  const { url, format, quality, jobId, outputDir, isPremium, userPlan, onProgress } = options;
+  const { url, format, quality, jobId, outputDir, isPremium, userPlan, freeLimitRate, onProgress } = options;
 
   const ytdlp = await findYtDlp();
   if (!ytdlp) {
@@ -689,8 +690,13 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
 
   // Free vs Premium Speed Throttling
   if (!isPremium) {
-    // Standart Free users have a bandwidth throttle (~850 KB/s) for realistic tiers
-    args.push('--limit-rate', '850K');
+    // If free limit rate is configured and not '0' or 'unlimited'
+    const limitRate = freeLimitRate && freeLimitRate !== '0' && freeLimitRate !== 'unlimited' 
+      ? freeLimitRate 
+      : '3M';
+    if (limitRate && limitRate !== '0') {
+      args.push('--limit-rate', limitRate);
+    }
   } else if (userPlan === 'premium_plus') {
     // VIP Plus users get maximum concurrent fragments
     args.push('--concurrent-fragments', '4');

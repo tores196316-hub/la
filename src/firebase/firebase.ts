@@ -500,3 +500,70 @@ export async function logoutFromFirebase(): Promise<void> {
 export async function sendResetPassword(email: string): Promise<void> {
   await sendPasswordResetEmail(auth, email);
 }
+
+/**
+ * Real-time subscription to Pricing Settings
+ */
+export function subscribeToPricingSettings(
+  onUpdate: (pricing: {
+    premiumMonthly: number;
+    premiumDiscountPercent: number;
+    premiumPlusMonthly: number;
+    premiumPlusDiscountPercent: number;
+    updatedAt?: number;
+  }) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const settingsDocRef = doc(db, 'settings', 'pricing');
+  return onSnapshot(
+    settingsDocRef,
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        onUpdate({
+          premiumMonthly: typeof data.premiumMonthly === 'number' ? data.premiumMonthly : 69,
+          premiumDiscountPercent:
+            typeof data.premiumDiscountPercent === 'number' ? data.premiumDiscountPercent : 30,
+          premiumPlusMonthly:
+            typeof data.premiumPlusMonthly === 'number' ? data.premiumPlusMonthly : 119,
+          premiumPlusDiscountPercent:
+            typeof data.premiumPlusDiscountPercent === 'number' ? data.premiumPlusDiscountPercent : 25,
+          updatedAt: data.updatedAt,
+        });
+      } else {
+        // Fallback default
+        onUpdate({
+          premiumMonthly: 69,
+          premiumDiscountPercent: 30,
+          premiumPlusMonthly: 119,
+          premiumPlusDiscountPercent: 25,
+        });
+      }
+    },
+    (err) => {
+      console.error('Pricing subscription error:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Update pricing settings in Firestore (Admin only)
+ */
+export async function updatePricingSettingsInFirestore(pricing: {
+  premiumMonthly: number;
+  premiumDiscountPercent: number;
+  premiumPlusMonthly: number;
+  premiumPlusDiscountPercent: number;
+}): Promise<void> {
+  const settingsDocRef = doc(db, 'settings', 'pricing');
+  await setDoc(
+    settingsDocRef,
+    {
+      ...pricing,
+      id: 'pricing',
+      updatedAt: Date.now(),
+    },
+    { merge: true }
+  );
+}

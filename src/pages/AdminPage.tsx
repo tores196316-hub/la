@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
-import { User, AdminDashboardData, UserRole, UserPlan } from '../types';
+import { User, AdminDashboardData, UserRole, UserPlan, PricingSettings, DEFAULT_PRICING } from '../types';
 import {
   Shield,
   Users,
@@ -22,10 +22,17 @@ import {
   ShieldAlert,
   Radio,
   Zap,
+  Tag,
+  Save,
+  Sparkles,
+  Percent,
+  TrendingDown,
 } from 'lucide-react';
 import {
   subscribeToAllUsers,
   saveUserToFirestore,
+  subscribeToPricingSettings,
+  updatePricingSettingsInFirestore,
 } from '../firebase/firebase';
 
 export function AdminPage() {
@@ -38,6 +45,15 @@ export function AdminPage() {
   const [isLiveConnected, setIsLiveConnected] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPlan, setFilterPlan] = useState<'all' | 'free' | 'premium' | 'admin'>('all');
+
+  // Pricing State
+  const [pricing, setPricing] = useState<PricingSettings>(DEFAULT_PRICING);
+  const [premiumMonthlyInput, setPremiumMonthlyInput] = useState<number>(DEFAULT_PRICING.premiumMonthly);
+  const [premiumDiscountInput, setPremiumDiscountInput] = useState<number>(DEFAULT_PRICING.premiumDiscountPercent);
+  const [plusMonthlyInput, setPlusMonthlyInput] = useState<number>(DEFAULT_PRICING.premiumPlusMonthly);
+  const [plusDiscountInput, setPlusDiscountInput] = useState<number>(DEFAULT_PRICING.premiumPlusDiscountPercent);
+  const [isSavingPricing, setIsSavingPricing] = useState(false);
+  const [pricingSavedToast, setPricingSavedToast] = useState(false);
 
   // Modal states
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -68,7 +84,7 @@ export function AdminPage() {
     }
   }, [user, isAdmin, isLoading, navigate]);
 
-  // Real-time Firestore user subscription
+  // Real-time Firestore user subscription & Pricing subscription
   useEffect(() => {
     if (!isAdmin) return;
 
@@ -85,6 +101,14 @@ export function AdminPage() {
         setIsLoading(false);
       }
     );
+
+    const unsubscribePricing = subscribeToPricingSettings((livePricing) => {
+      setPricing(livePricing);
+      setPremiumMonthlyInput(livePricing.premiumMonthly);
+      setPremiumDiscountInput(livePricing.premiumDiscountPercent);
+      setPlusMonthlyInput(livePricing.premiumPlusMonthly);
+      setPlusDiscountInput(livePricing.premiumPlusDiscountPercent);
+    });
 
     // Also fetch backend stats (FFmpeg, yt-dlp, conversion logs)
     const fetchBackendStats = async () => {
@@ -103,8 +127,39 @@ export function AdminPage() {
 
     return () => {
       unsubscribeUsers();
+      unsubscribePricing();
     };
   }, [isAdmin, authFetch]);
+
+  // Dynamic calculations for yearly pricing with discount
+  const calculatedPremiumYearlyPerMonth = Math.round(
+    premiumMonthlyInput * (1 - premiumDiscountInput / 100)
+  );
+  const calculatedPremiumYearlyTotal = calculatedPremiumYearlyPerMonth * 12;
+
+  const calculatedPlusYearlyPerMonth = Math.round(
+    plusMonthlyInput * (1 - plusDiscountInput / 100)
+  );
+  const calculatedPlusYearlyTotal = calculatedPlusYearlyPerMonth * 12;
+
+  const handleSavePricing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingPricing(true);
+    try {
+      await updatePricingSettingsInFirestore({
+        premiumMonthly: Number(premiumMonthlyInput) || 69,
+        premiumDiscountPercent: Number(premiumDiscountInput) || 30,
+        premiumPlusMonthly: Number(plusMonthlyInput) || 119,
+        premiumPlusDiscountPercent: Number(plusDiscountInput) || 25,
+      });
+      setPricingSavedToast(true);
+      setTimeout(() => setPricingSavedToast(false), 3000);
+    } catch (err: any) {
+      alert('Fiyatlar güncellenirken hata oluştu: ' + err.message);
+    } finally {
+      setIsSavingPricing(false);
+    }
+  };
 
   if (!user || (!isAdmin && user.role !== 'admin')) {
     return (
@@ -352,6 +407,179 @@ export function AdminPage() {
             {dashboardData?.conversions.successful || 0} Başarılı / {dashboardData?.conversions.failed || 0} Hata
           </div>
         </div>
+      </div>
+
+      {/* Dynamic Package Pricing Management Card */}
+      <div className="rounded-2xl bg-[#0e1017] border border-amber-400/30 p-5 sm:p-6 space-y-5 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-400/10 border border-amber-400/20 text-amber-400">
+              <Tag className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-white">Premium Paket Fiyatlandırma Yönetimi</h2>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                  OTOMATİK YILLIK HESAPLAMA
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Aylık fiyatı değiştirdiğinizde, yıllık indirimli fiyat ve toplam ücret otomatik olarak hesaplanır ve canlıya yansır.
+              </p>
+            </div>
+          </div>
+
+          {pricingSavedToast && (
+            <div className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>Fiyatlar Güncellendi ve Yayında!</span>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleSavePricing} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Standard Premium Tier Box */}
+            <div className="p-4 sm:p-5 rounded-xl bg-[#07080b] border border-amber-400/20 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm font-bold text-white">IMGIVO Premium Paketi</span>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-400/10 text-amber-300">
+                  2K / 4K / 320k HQ
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-300">Aylık Fiyat (₺)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₺</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={9999}
+                      value={premiumMonthlyInput}
+                      onChange={(e) => setPremiumMonthlyInput(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                      className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-300">Yıllık İndirim (%)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={premiumDiscountInput}
+                      onChange={(e) => setPremiumDiscountInput(Math.min(90, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                      className="w-full pl-3 pr-7 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                      required
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Calculated Yearly Preview */}
+              <div className="p-3 rounded-lg bg-amber-400/[0.06] border border-amber-400/20 text-xs space-y-1.5">
+                <div className="flex items-center justify-between text-slate-300">
+                  <span className="flex items-center gap-1">
+                    <TrendingDown className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Otomatik Yıllık Aylık Eşdeğeri:</span>
+                  </span>
+                  <span className="font-mono font-bold text-emerald-400">₺{calculatedPremiumYearlyPerMonth} / ay</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                  <span>Kullanıcının Ödeyeceği Yıllık Toplam:</span>
+                  <span className="font-mono font-semibold text-white">₺{calculatedPremiumYearlyTotal} / yıl</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Premium Plus Tier Box */}
+            <div className="p-4 sm:p-5 rounded-xl bg-[#07080b] border border-purple-500/20 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm font-bold text-white">Premium Plus (VIP) Paketi</span>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300">
+                  4K 60FPS / Ultra Turbo
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-300">Aylık Fiyat (₺)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₺</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={9999}
+                      value={plusMonthlyInput}
+                      onChange={(e) => setPlusMonthlyInput(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                      className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-purple-400"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-300">Yıllık İndirim (%)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={90}
+                      value={plusDiscountInput}
+                      onChange={(e) => setPlusDiscountInput(Math.min(90, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                      className="w-full pl-3 pr-7 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-purple-400"
+                      required
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Calculated Yearly Preview */}
+              <div className="p-3 rounded-lg bg-purple-500/[0.06] border border-purple-500/20 text-xs space-y-1.5">
+                <div className="flex items-center justify-between text-slate-300">
+                  <span className="flex items-center gap-1">
+                    <TrendingDown className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Otomatik Yıllık Aylık Eşdeğeri:</span>
+                  </span>
+                  <span className="font-mono font-bold text-purple-300">₺{calculatedPlusYearlyPerMonth} / ay</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                  <span>Kullanıcının Ödeyeceği Yıllık Toplam:</span>
+                  <span className="font-mono font-semibold text-white">₺{calculatedPlusYearlyTotal} / yıl</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span>Kaydettiğiniz an Premium sayfasındaki tüm fiyatlar ve indirim etiketleri canlı güncellenir.</span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSavingPricing}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-bold text-xs transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSavingPricing ? 'Kaydediliyor...' : 'Fiyat Değişikliklerini Canlıya Al'}</span>
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* User Management Section */}

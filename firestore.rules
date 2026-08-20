@@ -62,5 +62,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+
+    // Platform Settings & Live Pricing
+    match /settings/{settingsId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }

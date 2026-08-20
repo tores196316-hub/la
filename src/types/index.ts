@@ -156,3 +156,18 @@ export interface AdminDashboardData {
   };
 }
 
+export interface PricingSettings {
+  premiumMonthly: number;
+  premiumDiscountPercent: number; // e.g. 30 (for 30% off on yearly)
+  premiumPlusMonthly: number;
+  premiumPlusDiscountPercent: number;
+  updatedAt?: number;
+}
+
+export const DEFAULT_PRICING: PricingSettings = {
+  premiumMonthly: 69,
+  premiumDiscountPercent: 30,
+  premiumPlusMonthly: 119,
+  premiumPlusDiscountPercent: 25,
+};
+

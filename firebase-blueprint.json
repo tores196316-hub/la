@@ -143,6 +143,39 @@
         }
       },
       "required": ["id", "totalConversions", "successfulConversions", "failedConversions"]
+    },
+    "PricingSettings": {
+      "title": "PricingSettings",
+      "description": "Dynamic pricing configuration for Premium tiers",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document ID, usually 'pricing'",
+          "maxLength": 64
+        },
+        "premiumMonthly": {
+          "type": "number",
+          "description": "Monthly price in TRY for Premium"
+        },
+        "premiumDiscountPercent": {
+          "type": "number",
+          "description": "Yearly discount percent (e.g., 30)"
+        },
+        "premiumPlusMonthly": {
+          "type": "number",
+          "description": "Monthly price in TRY for Premium Plus"
+        },
+        "premiumPlusDiscountPercent": {
+          "type": "number",
+          "description": "Yearly discount percent for Premium Plus"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Last updated timestamp"
+        }
+      },
+      "required": ["id", "premiumMonthly", "premiumDiscountPercent", "premiumPlusMonthly", "premiumPlusDiscountPercent"]
     }
   },
   "firestore": {
@@ -163,6 +196,12 @@
         "$ref": "#/entities/SystemStats"
       },
       "description": "Stores platform metrics and live conversion counts"
+    },
+    "/settings/{settingsId}": {
+      "schema": {
+        "$ref": "#/entities/PricingSettings"
+      },
+      "description": "Stores platform-wide settings including live pricing"
     }
   }
 }

@@ -9,8 +9,17 @@ const TEMP_DIR = path.resolve(process.cwd(), 'tmp', 'downloads');
 const JOB_EXPIRATION_MS = (parseInt(process.env.JOB_EXPIRATION_MINUTES || '30', 10)) * 60 * 1000;
 const MAX_CONCURRENT_JOBS = parseInt(process.env.MAX_CONCURRENT_JOBS || '5', 10);
 
+interface FreeSpeedConfig {
+  queueDelaySeconds: number; // e.g. 0 to 10 seconds
+  downloadLimitRate: string; // e.g. '0' (unlimited) or '2M', '3M', '5M'
+}
+
 class JobManager {
   private jobs: Map<string, ConversionJob> = new Map();
+  private freeSpeedConfig: FreeSpeedConfig = {
+    queueDelaySeconds: 2, // varsayılan hafif 2 saniye kuyruk
+    downloadLimitRate: '3M', // varsayılan 3 MB/s (makul ve akıcı)
+  };
   private stats = {
     totalConversions: 0,
     successfulConversions: 0,
@@ -95,6 +104,20 @@ class JobManager {
     return job;
   }
 
+  public getFreeSpeedConfig(): FreeSpeedConfig {
+    return { ...this.freeSpeedConfig };
+  }
+
+  public updateFreeSpeedConfig(config: Partial<FreeSpeedConfig>): FreeSpeedConfig {
+    if (typeof config.queueDelaySeconds === 'number') {
+      this.freeSpeedConfig.queueDelaySeconds = Math.max(0, Math.min(30, config.queueDelaySeconds));
+    }
+    if (typeof config.downloadLimitRate === 'string') {
+      this.freeSpeedConfig.downloadLimitRate = config.downloadLimitRate.trim();
+    }
+    return { ...this.freeSpeedConfig };
+  }
+
   public getJob(jobId: string): ConversionJob | undefined {
     return this.jobs.get(jobId);
   }
@@ -113,24 +136,25 @@ class JobManager {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
-    // Standard Free Tier Queue Throttle (Simulation: 4.5s queue delay with status updates)
-    if (!job.isPremium) {
-      // Step 1: Queue position #3
-      await new Promise((r) => setTimeout(r, 2200));
-      const jobStep1 = this.jobs.get(jobId);
-      if (!jobStep1 || jobStep1.state === 'failed') return;
-      jobStep1.progress = {
-        percentage: 3,
-        stage: 'queued',
-        stageMessage: 'Standart İndirme Sırası: Sunucu hazırlanıyor (Sıra #1)...',
-        queuePosition: 1,
-      };
-      jobStep1.updatedAt = Date.now();
+    // Standard Free Tier Queue Throttle (Configurable by Admin)
+    if (!job.isPremium && this.freeSpeedConfig.queueDelaySeconds > 0) {
+      const halfDelay = (this.freeSpeedConfig.queueDelaySeconds * 1000) / 2;
+      if (halfDelay > 200) {
+        await new Promise((r) => setTimeout(r, halfDelay));
+        const jobStep1 = this.jobs.get(jobId);
+        if (!jobStep1 || jobStep1.state === 'failed') return;
+        jobStep1.progress = {
+          percentage: 3,
+          stage: 'queued',
+          stageMessage: 'Standart İndirme Sırası: Sunucu hazırlanıyor (Sıra #1)...',
+          queuePosition: 1,
+        };
+        jobStep1.updatedAt = Date.now();
 
-      // Step 2: Queue position #1
-      await new Promise((r) => setTimeout(r, 2000));
-      const jobStep2 = this.jobs.get(jobId);
-      if (!jobStep2 || jobStep2.state === 'failed') return;
+        await new Promise((r) => setTimeout(r, halfDelay));
+        const jobStep2 = this.jobs.get(jobId);
+        if (!jobStep2 || jobStep2.state === 'failed') return;
+      }
     }
 
     job.state = 'downloading';
@@ -151,6 +175,7 @@ class JobManager {
         outputDir: TEMP_DIR,
         isPremium: job.isPremium,
         userPlan: job.userPlan,
+        freeLimitRate: this.freeSpeedConfig.downloadLimitRate,
         onProgress: (progress: JobProgress) => {
           const currentJob = this.jobs.get(jobId);
           if (currentJob && currentJob.state !== 'failed') {

@@ -36,6 +36,112 @@ export function formatBytes(bytes?: number): string {
 }
 
 /**
+ * Resolves optional cookie file path from environment variables safely.
+ */
+export function getResolvedCookiePath(): string | null {
+  const customPath = process.env.YTDLP_COOKIES_PATH;
+  if (customPath && fs.existsSync(customPath)) {
+    return customPath;
+  }
+
+  const defaultCookieFile = path.resolve(process.cwd(), 'tmp', 'cookies.txt');
+  if (fs.existsSync(defaultCookieFile)) {
+    try {
+      const stats = fs.statSync(defaultCookieFile);
+      if (stats.size > 10) return defaultCookieFile;
+    } catch {
+      // ignore
+    }
+  }
+
+  // Check if base64 or raw string is in env
+  const envContent = process.env.YTDLP_COOKIE_CONTENT || process.env.YTDLP_COOKIES_BASE64;
+  if (envContent) {
+    try {
+      const decoded = process.env.YTDLP_COOKIES_BASE64
+        ? Buffer.from(process.env.YTDLP_COOKIES_BASE64, 'base64').toString('utf-8')
+        : envContent;
+      const tmpDir = path.resolve(process.cwd(), 'tmp');
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      fs.writeFileSync(defaultCookieFile, decoded, { mode: 0o600 });
+      return defaultCookieFile;
+    } catch (e) {
+      console.warn('Cookie içeriği yazılamadı:', e);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Builds base yt-dlp arguments including JavaScript runtime, anti-blocking, proxy & cookies.
+ */
+export function buildBaseYtDlpArgs(): string[] {
+  const args: string[] = [
+    '--no-warnings',
+    '--no-playlist',
+    '--no-check-certificates',
+    '--force-ipv4',
+    '--geo-bypass',
+    '--extractor-args',
+    'youtube:player_client=android,web;js_engine=node',
+  ];
+
+  // Configure optional proxy if provided via env
+  const proxy = process.env.YTDLP_PROXY || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+  if (proxy && proxy.trim()) {
+    args.push('--proxy', proxy.trim());
+  }
+
+  // Configure optional cookies if available
+  const cookiePath = getResolvedCookiePath();
+  if (cookiePath) {
+    args.push('--cookies', cookiePath);
+  }
+
+  return args;
+}
+
+/**
+ * Parses stderr output and maps it to clear, descriptive error messages.
+ */
+export function parseYtDlpError(rawError: string): Error {
+  const lower = rawError.toLowerCase();
+
+  if (lower.includes('429') || lower.includes('too many requests')) {
+    return new Error(
+      'YouTube sunucusu IP adresine geçici istek sınırı (HTTP 429) uyguladı. Lütfen birkaç dakika sonra tekrar deneyin veya Railway ayarlarından bir proxy/cookie yapılandırın.'
+    );
+  }
+
+  if (lower.includes('sign in to confirm you’re not a bot') || lower.includes('sign in to confirm you are not a bot') || (lower.includes('bot') && lower.includes('confirm'))) {
+    return new Error(
+      'YouTube bot doğrulaması talep etti. Lütfen başka bir video/format deneyin veya sistem için YouTube cookie tanımlayın.'
+    );
+  }
+
+  if (lower.includes('no supported javascript runtime could be found') || lower.includes('javascript runtime')) {
+    return new Error(
+      'JavaScript çalışma ortamı (Node.js runtime) hatası oluştu. Sistem ortamı güncelleniyor.'
+    );
+  }
+
+  if (lower.includes('video unavailable') || lower.includes('this video is unavailable') || lower.includes('private video') || lower.includes('has been removed')) {
+    return new Error('Bu video kullanılamıyor, gizli veya YouTube tarafından kaldırılmış.');
+  }
+
+  if (lower.includes('requested format is not available')) {
+    return new Error('Seçtiğin kalite veya format bu içerik için mevcut değil. Lütfen başka bir seçenek belirleyin.');
+  }
+
+  if (lower.includes('timed out') || lower.includes('timeout')) {
+    return new Error('İşlem zaman aşımına uğradı. Sunucu yoğun olabilir, lütfen tekrar deneyin.');
+  }
+
+  return new Error('Bu içerik şu anda işlenemiyor. Lütfen bağlantıyı kontrol edip tekrar deneyin.');
+}
+
+/**
  * Extracts metadata for a given YouTube URL using yt-dlp.
  */
 export async function extractMetadata(url: string): Promise<VideoMetadata> {
@@ -46,11 +152,7 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
 
   const args = [
     '--dump-single-json',
-    '--no-warnings',
-    '--no-playlist',
-    '--no-check-certificates',
-    '--extractor-args',
-    'youtube:player_client=ios,android,web',
+    ...buildBaseYtDlpArgs(),
     '--',
     url,
   ];
@@ -58,7 +160,7 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
   return new Promise((resolve, reject) => {
     const child = spawn(ytdlp.path, args, {
       timeout: 30000,
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      env: { ...process.env, PYTHONUNBUFFERED: '1', YTDLP_JS_ENGINE: 'node' },
     });
 
     let stdoutData = '';
@@ -79,13 +181,7 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
     child.on('close', (code) => {
       if (code !== 0) {
         const errorMsg = stderrData || stdoutData || 'Bilinmeyen analiz hatası';
-        if (errorMsg.includes('Video unavailable') || errorMsg.includes('Private video')) {
-          return reject(new Error('Bu video kullanılamıyor veya gizli olarak işaretlenmiş.'));
-        }
-        if (errorMsg.includes('Sign in') || errorMsg.includes('bot')) {
-          return reject(new Error('Bu içerik şu anda işlenemiyor.'));
-        }
-        return reject(new Error('Geçerli bir video bağlantısı gir.'));
+        return reject(parseYtDlpError(errorMsg));
       }
 
       try {
@@ -117,10 +213,8 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
         ];
 
         targetHeights.forEach((t) => {
-          // If video has at least this resolution or if it's 360p/480p/720p
           const hasQuality = Array.from(videoHeights).some((h) => h >= t.height) || t.height <= 720;
           if (hasQuality) {
-            // Find approximate filesize if duration is known
             let approxBytes: number | undefined;
             if (duration > 0) {
               const bitrateKbps = t.height >= 2160 ? 15000 : t.height >= 1440 ? 8000 : t.height >= 1080 ? 4000 : t.height >= 720 ? 2200 : t.height >= 480 ? 1000 : 600;
@@ -182,7 +276,6 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
 
         availableFormats.push(...audioOptions);
 
-        // Select high-res thumbnail if available
         let thumbnail = info.thumbnail || '';
         if (Array.isArray(info.thumbnails) && info.thumbnails.length > 0) {
           const sorted = [...info.thumbnails].sort((a, b) => (b.width || 0) - (a.width || 0));
@@ -208,7 +301,7 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
 
         resolve(metadata);
       } catch (err: any) {
-        reject(new Error(`Video metadata parse edilemedi: ${err.message}`));
+        reject(new Error(`Video metadata ayrıştırılamadı: ${err.message}`));
       }
     });
   });
@@ -252,17 +345,11 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  // Define unique output template
   const outputTemplate = path.join(outputDir, `${jobId}_%(title).50s.%(ext)s`);
 
-  // Build command arguments safely without shell injection
   const args: string[] = [
-    '--no-playlist',
-    '--no-warnings',
-    '--no-check-certificates',
-    '--newline', // Output progress line by line
-    '--extractor-args',
-    'youtube:player_client=ios,android,web',
+    ...buildBaseYtDlpArgs(),
+    '--newline',
     '--output', outputTemplate,
   ];
 
@@ -273,7 +360,8 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
   const isAudio = format === 'mp3' || format === 'm4a';
 
   if (isAudio) {
-    args.push('-x'); // Extract audio
+    args.push('-x');
+    args.push('-f', 'ba/b');
     if (format === 'mp3') {
       args.push('--audio-format', 'mp3');
       const bitrateValue = quality.replace('k', '') || '320';
@@ -282,23 +370,19 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
       args.push('--audio-format', 'm4a');
     }
   } else {
-    // Video format matching exact target resolution without downscaling
-    let maxH = 1080;
-    if (quality === '2160p') maxH = 2160;
-    else if (quality === '1440p') maxH = 1440;
-    else if (quality === '1080p') maxH = 1080;
-    else if (quality === '720p') maxH = 720;
-    else if (quality === '480p') maxH = 480;
-    else if (quality === '360p') maxH = 360;
+    let maxDim = 1080;
+    if (quality === '2160p') maxDim = 2160;
+    else if (quality === '1440p') maxDim = 1440;
+    else if (quality === '1080p') maxDim = 1080;
+    else if (quality === '720p') maxDim = 720;
+    else if (quality === '480p') maxDim = 480;
+    else if (quality === '360p') maxDim = 360;
 
-    // First try exact height match, then fallback to best available under or equal to height
     args.push(
       '-f',
-      `bestvideo[height=${maxH}]+bestaudio/bestvideo[height<=${maxH}]+bestaudio/best[height<=${maxH}]/bestvideo+bestaudio/best`
+      `bv*[height<=?${maxDim}]+ba/bv*[width<=?${maxDim}]+ba/b[height<=?${maxDim}]/b[width<=?${maxDim}]/bv*+ba/b`
     );
     args.push('--merge-output-format', 'mp4');
-    // Ensure FFmpeg copies video and encodes audio to standard AAC or copies streams
-    args.push('--remux-video', 'mp4');
   }
 
   args.push('--', url);
@@ -311,12 +395,11 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
     });
 
     const child = spawn(ytdlp.path, args, {
-      timeout: 10 * 60 * 1000, // 10 minutes timeout
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      timeout: 10 * 60 * 1000,
+      env: { ...process.env, PYTHONUNBUFFERED: '1', YTDLP_JS_ENGINE: 'node' },
     });
 
     let stderrData = '';
-    let lastPercentage = 5;
 
     child.stdout.on('data', (data) => {
       const lines = data.toString().split('\n');
@@ -324,11 +407,9 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
         const trimmed = line.trim();
         if (!trimmed) continue;
 
-        // Parse download percentage: [download]  45.2% of ~ 15.34MiB at 4.21MiB/s ETA 00:02
         const downloadMatch = trimmed.match(/\[download\]\s+(\d+(?:\.\d+)?)%\s+of\s+~?([^\s]+)\s+at\s+([^\s]+)\s+ETA\s+([^\s]+)/i);
         if (downloadMatch) {
           const pct = Math.min(Math.max(parseFloat(downloadMatch[1]), 5), 85);
-          lastPercentage = pct;
           onProgress?.({
             percentage: Math.round(pct),
             stage: 'downloading',
@@ -339,9 +420,7 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
           continue;
         }
 
-        // Generic 100% download match
         if (trimmed.includes('[download] 100%')) {
-          lastPercentage = 85;
           onProgress?.({
             percentage: 85,
             stage: 'converting',
@@ -350,9 +429,7 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
           continue;
         }
 
-        // Processing & conversion hooks
         if (trimmed.includes('[Merger]') || trimmed.includes('[ExtractAudio]') || trimmed.includes('[FixupM4a]')) {
-          lastPercentage = 90;
           onProgress?.({
             percentage: 90,
             stage: 'converting',
@@ -382,17 +459,10 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
 
     child.on('close', (code) => {
       if (code !== 0) {
-        const errorMsg = stderrData || 'Dönüştürme işlemi başarısız oldu.';
-        if (errorMsg.includes('Requested format is not available')) {
-          return reject(new Error('Seçtiğin format bu içerik için kullanılamıyor.'));
-        }
-        if (errorMsg.includes('timed out')) {
-          return reject(new Error('İşlem zaman aşımına uğradı. Lütfen tekrar dene.'));
-        }
-        return reject(new Error('Bu içerik şu anda işlenemiyor.'));
+        console.error(`yt-dlp download failed with code ${code}. Stderr:`, stderrData);
+        return reject(parseYtDlpError(stderrData));
       }
 
-      // Locate the created file in outputDir matching jobId
       try {
         const files = fs.readdirSync(outputDir);
         const matchingFile = files.find((f) => f.startsWith(`${jobId}_`));
@@ -404,7 +474,6 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
         const fullPath = path.join(outputDir, matchingFile);
         const stats = fs.statSync(fullPath);
 
-        // Sanitize final download filename
         const cleanName = matchingFile.replace(new RegExp(`^${jobId}_`), '');
         const ext = path.extname(matchingFile) || `.${format}`;
         const base = path.basename(cleanName, ext);

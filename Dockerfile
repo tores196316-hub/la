@@ -1,22 +1,28 @@
 # ==========================================
 # IMGIVO — YouTube Video & Audio Converter
 # Production Dockerfile for Railway / Container Runtime
+# Node.js 22+ with Python3, FFmpeg, yt-dlp[default] & yt-dlp-ejs
 # ==========================================
 
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
-# Install system dependencies: FFmpeg, Python3, curl, ca-certificates
+# Install system dependencies: FFmpeg, Python3, pip, curl, ca-certificates
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     python3 \
     python3-pip \
+    python3-venv \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install latest yt-dlp binary
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp
+# Install yt-dlp with [default] dependencies and yt-dlp-ejs (Node.js JS runtime engine provider)
+RUN pip3 install --no-cache-dir --break-system-packages "yt-dlp[default]" yt-dlp-ejs
+
+# Ensure binaries and Node.js are readily discoverable in PATH
+ENV PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+ENV YTDLP_JS_ENGINE="node"
+ENV PYTHONUNBUFFERED="1"
 
 # Set working directory
 WORKDIR /app

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { apiRouter } from './server/routes/api.js';
 import { getSystemDiagnostic } from './server/services/systemChecker.js';
 import { jobManager } from './server/services/jobManager.js';
+import { getResolvedCookiePath } from './server/services/ytdlp.js';
 
 dotenv.config();
 
@@ -89,6 +90,8 @@ async function setupFrontend() {
   }
 }
 
+let serverInstance: any = null;
+
 async function startServer() {
   // Check system dependencies on start
   const diag = await getSystemDiagnostic(true);
@@ -97,14 +100,44 @@ async function startServer() {
   console.log(`FFmpeg: ${diag.ffmpegFound ? `✓ (${diag.ffmpegVersion})` : '✗ Bulunamadı'}`);
   console.log(`Geçici Dizin: ${diag.tempDir} (Yazılabilir: ${diag.tempDirWritable})`);
 
+  // Check cookie and proxy status
+  const cookiePath = getResolvedCookiePath();
+  if (cookiePath) {
+    console.log(`🍪 YouTube Cookies aktif: ${cookiePath}`);
+  }
+  const proxy = process.env.YTDLP_PROXY || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+  if (proxy) {
+    console.log(`🌐 Proxy aktif: ${proxy.replace(/:\/\/[^:]+:[^@]+@/, '://***:***@')}`);
+  }
+
   jobManager.cleanExpiredFiles();
 
   await setupFrontend();
 
-  app.listen(PORT, '0.0.0.0', () => {
+  serverInstance = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 IMGIVO Sunucusu http://0.0.0.0:${PORT} adresinde çalışıyor`);
   });
 }
+
+// Graceful shutdown on SIGTERM / SIGINT for clean Railway lifecycle
+function handleGracefulShutdown(signal: string) {
+  console.log(`🛑 ${signal} sinyali alındı. Sunucu kapatılıyor...`);
+  if (serverInstance) {
+    serverInstance.close(() => {
+      console.log('✅ HTTP sunucusu kapatıldı.');
+      process.exit(0);
+    });
+    setTimeout(() => {
+      console.warn('⚠️ Zorunlu çıkış yapılıyor.');
+      process.exit(0);
+    }, 5000).unref();
+  } else {
+    process.exit(0);
+  }
+}
+
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 
 startServer().catch((err) => {
   console.error('Sunucu başlatılırken kritik hata:', err);

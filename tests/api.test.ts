@@ -6,8 +6,9 @@
 import { isValidYouTubeUrl, extractYouTubeVideoId, getCanonicalYouTubeUrl, sanitizeFileName, isValidJobId, isSafePath } from '../server/utils/security.js';
 import { jobManager } from '../server/services/jobManager.js';
 import { getSystemDiagnostic } from '../server/services/systemChecker.js';
-import { extractAvailableResolutions } from '../server/services/ytdlp.js';
+import { extractAvailableResolutions, getResolvedCookiePath, buildBaseYtDlpArgs } from '../server/services/ytdlp.js';
 import path from 'path';
+import fs from 'fs';
 
 async function runTests() {
   console.log('🧪 IMGIVO Test Suite Başlatılıyor...\n');
@@ -137,6 +138,29 @@ async function runTests() {
   assert(res360Only.includes(360), '360p video için 360p algılandı');
   assert(!res360Only.includes(720), '360p videoda 720p eklenmedi');
   assert(!res360Only.includes(1080), '360p videoda 1080p eklenmedi');
+
+  // 7. Cookie & Proxy Yapılandırma Testleri
+  console.log('\n[7] Authentication & Proxy Yapılandırma Testleri');
+  
+  // Test raw cookie content with escaped newlines
+  const sampleCookieContent = '# Netscape HTTP Cookie File\\n.youtube.com\\tTRUE\\t/\\tTRUE\\t1799999999\\tSID\\tsample_session_id';
+  process.env.YTDLP_COOKIE_CONTENT = sampleCookieContent;
+  const cookiePath = getResolvedCookiePath();
+  assert(cookiePath !== null && fs.existsSync(cookiePath), 'Cookie içeriği dosyaya başarıyla yazıldı');
+  if (cookiePath && fs.existsSync(cookiePath)) {
+    const written = fs.readFileSync(cookiePath, 'utf-8');
+    assert(written.includes('\n.youtube.com'), 'Kaçışlı satır sonları (\\n) gerçek satır sonuna çevrildi');
+  }
+
+  // Test proxy configuration in yt-dlp arguments
+  process.env.YTDLP_PROXY = 'http://proxy.example.com:8080';
+  const ytdlpArgs = buildBaseYtDlpArgs();
+  assert(ytdlpArgs.includes('--proxy') && ytdlpArgs.includes('http://proxy.example.com:8080'), 'Proxy parametresi yt-dlp komutuna eklendi');
+  assert(ytdlpArgs.includes('--cookies') && ytdlpArgs.includes(cookiePath || ''), 'Cookies parametresi yt-dlp komutuna eklendi');
+
+  // Clean test env vars
+  delete process.env.YTDLP_COOKIE_CONTENT;
+  delete process.env.YTDLP_PROXY;
 
   console.log(`\n========================================`);
   console.log(`📊 Test Sonuçları: ${passed} Başarılı, ${failed} Başarısız`);

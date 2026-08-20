@@ -37,36 +37,69 @@ export function formatBytes(bytes?: number): string {
 
 /**
  * Resolves optional cookie file path from environment variables safely.
+ * Supports YTDLP_COOKIES_BASE64, YTDLP_COOKIE_CONTENT, YTDLP_COOKIES, and YTDLP_COOKIES_PATH.
  */
 export function getResolvedCookiePath(): string | null {
   const customPath = process.env.YTDLP_COOKIES_PATH;
-  if (customPath && fs.existsSync(customPath)) {
-    return customPath;
+  if (customPath && customPath.trim()) {
+    const resolvedPath = path.isAbsolute(customPath)
+      ? customPath
+      : path.resolve(process.cwd(), customPath);
+    if (fs.existsSync(resolvedPath)) {
+      try {
+        const stats = fs.statSync(resolvedPath);
+        if (stats.size > 10) return resolvedPath;
+      } catch {
+        // ignore
+      }
+    }
   }
 
   const defaultCookieFile = path.resolve(process.cwd(), 'tmp', 'cookies.txt');
+
+  // Check if base64 or raw string is in env (handles base64, raw string, and escaped newlines)
+  const envContent =
+    process.env.YTDLP_COOKIES_BASE64 ||
+    process.env.YTDLP_COOKIE_CONTENT ||
+    process.env.YTDLP_COOKIES ||
+    process.env.YOUTUBE_COOKIES;
+
+  if (envContent && envContent.trim()) {
+    try {
+      let decoded = '';
+      if (process.env.YTDLP_COOKIES_BASE64 && process.env.YTDLP_COOKIES_BASE64.trim()) {
+        decoded = Buffer.from(process.env.YTDLP_COOKIES_BASE64.trim(), 'base64').toString('utf-8');
+      } else {
+        decoded = envContent;
+      }
+
+      // If user pasted multi-line cookies into a single-line environment variable UI (literal \n or \r\n)
+      if (decoded.includes('\\n')) {
+        decoded = decoded.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\n');
+      }
+
+      decoded = decoded.trim();
+
+      if (decoded.length > 10) {
+        const tmpDir = path.resolve(process.cwd(), 'tmp');
+        if (!fs.existsSync(tmpDir)) {
+          fs.mkdirSync(tmpDir, { recursive: true });
+        }
+        fs.writeFileSync(defaultCookieFile, decoded, { encoding: 'utf-8', mode: 0o600 });
+        return defaultCookieFile;
+      }
+    } catch (e: any) {
+      console.warn('Cookie içeriği dosyaya yazılamadı:', e?.message || 'Bilinmeyen hata');
+    }
+  }
+
+  // Fallback to pre-existing cookie file on disk if valid
   if (fs.existsSync(defaultCookieFile)) {
     try {
       const stats = fs.statSync(defaultCookieFile);
       if (stats.size > 10) return defaultCookieFile;
     } catch {
       // ignore
-    }
-  }
-
-  // Check if base64 or raw string is in env
-  const envContent = process.env.YTDLP_COOKIE_CONTENT || process.env.YTDLP_COOKIES_BASE64;
-  if (envContent) {
-    try {
-      const decoded = process.env.YTDLP_COOKIES_BASE64
-        ? Buffer.from(process.env.YTDLP_COOKIES_BASE64, 'base64').toString('utf-8')
-        : envContent;
-      const tmpDir = path.resolve(process.cwd(), 'tmp');
-      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-      fs.writeFileSync(defaultCookieFile, decoded, { mode: 0o600 });
-      return defaultCookieFile;
-    } catch (e) {
-      console.warn('Cookie içeriği yazılamadı:', e);
     }
   }
 
@@ -95,6 +128,9 @@ export function getNodeExecutablePath(): string {
 export function buildBaseYtDlpArgs(): string[] {
   const nodePath = getNodeExecutablePath();
 
+  const extractorArgs =
+    process.env.YTDLP_EXTRACTOR_ARGS || 'youtube:player_client=web,android,ios';
+
   const args: string[] = [
     '--no-warnings',
     '--no-playlist',
@@ -104,21 +140,28 @@ export function buildBaseYtDlpArgs(): string[] {
     // Explicit JavaScript Runtime configuration for yt-dlp & yt-dlp-ejs
     '--js-runtimes',
     `node:${nodePath}`,
-    // YouTube player client priority: web client is essential for 1080p/1440p/4K DASH stream extraction
+    // YouTube player client priority
     '--extractor-args',
-    'youtube:player_client=web,android,ios',
+    extractorArgs,
   ];
 
   // Configure optional proxy if provided via env
-  const proxy = process.env.YTDLP_PROXY || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+  const proxy =
+    process.env.YTDLP_PROXY ||
+    process.env.HTTP_PROXY ||
+    process.env.HTTPS_PROXY ||
+    process.env.ALL_PROXY;
+
   if (proxy && proxy.trim()) {
     args.push('--proxy', proxy.trim());
+    console.log('[PROXY] Proxy yapılandırması yt-dlp komutuna uygulandı.');
   }
 
   // Configure optional cookies if available
   const cookiePath = getResolvedCookiePath();
   if (cookiePath) {
     args.push('--cookies', cookiePath);
+    console.log(`[AUTH] Cookie dosyası yt-dlp komutuna uygulandı (${cookiePath}).`);
   }
 
   return args;

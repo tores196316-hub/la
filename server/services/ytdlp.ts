@@ -36,11 +36,12 @@ export function formatBytes(bytes?: number): string {
 }
 
 /**
- * Resolves optional cookie file path from environment variables safely.
- * Supports YTDLP_COOKIES_BASE64, YTDLP_COOKIE_CONTENT, YTDLP_COOKIES, and YTDLP_COOKIES_PATH,
- * as well as candidate files in /app/tmp/cookies.txt, ./tmp/cookies.txt, /tmp/cookies.txt.
+ * Resolves optional cookie file path from environment variables or disk safely.
+ * Prioritizes pre-existing valid cookie files on disk (/app/tmp/cookies.txt, etc.)
+ * before decoding environment variables, ensuring manually configured working files are always used.
  */
 export function getResolvedCookiePath(): string | null {
+  // 1. Explicit path from env
   const customPath = process.env.YTDLP_COOKIES_PATH;
   if (customPath && customPath.trim()) {
     const resolvedPath = path.isAbsolute(customPath)
@@ -56,9 +57,27 @@ export function getResolvedCookiePath(): string | null {
     }
   }
 
-  const defaultCookieFile = path.resolve(process.cwd(), 'tmp', 'cookies.txt');
+  // 2. Check candidate cookie file locations on disk first (PRIORITY: /app/tmp/cookies.txt)
+  const candidatePaths = [
+    '/app/tmp/cookies.txt',
+    path.resolve(process.cwd(), 'tmp', 'cookies.txt'),
+    '/tmp/cookies.txt',
+    path.resolve(process.cwd(), 'cookies.txt'),
+    '/app/cookies.txt',
+  ];
 
-  // Check if base64 or raw string is in env (handles base64, raw string, and escaped newlines)
+  for (const cPath of candidatePaths) {
+    if (fs.existsSync(cPath)) {
+      try {
+        const stats = fs.statSync(cPath);
+        if (stats.size > 10) return cPath;
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  // 3. If no file on disk, check if raw or base64 string is in env
   const envContent =
     process.env.YTDLP_COOKIES_BASE64 ||
     process.env.YTDLP_COOKIE_CONTENT ||
@@ -82,35 +101,19 @@ export function getResolvedCookiePath(): string | null {
       decoded = decoded.trim();
 
       if (decoded.length > 10) {
-        const tmpDir = path.resolve(process.cwd(), 'tmp');
-        if (!fs.existsSync(tmpDir)) {
-          fs.mkdirSync(tmpDir, { recursive: true });
+        // Choose best writable target path
+        const targetDir = fs.existsSync('/app/tmp')
+          ? '/app/tmp'
+          : path.resolve(process.cwd(), 'tmp');
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
         }
-        fs.writeFileSync(defaultCookieFile, decoded, { encoding: 'utf-8', mode: 0o600 });
-        return defaultCookieFile;
+        const targetFile = path.join(targetDir, 'cookies.txt');
+        fs.writeFileSync(targetFile, decoded, { encoding: 'utf-8', mode: 0o600 });
+        return targetFile;
       }
     } catch (e: any) {
       console.warn('Cookie içeriği dosyaya yazılamadı:', e?.message || 'Bilinmeyen hata');
-    }
-  }
-
-  // Check all candidate cookie file locations on disk
-  const candidatePaths = [
-    '/app/tmp/cookies.txt',
-    defaultCookieFile,
-    '/tmp/cookies.txt',
-    path.resolve(process.cwd(), 'cookies.txt'),
-    '/app/cookies.txt',
-  ];
-
-  for (const cPath of candidatePaths) {
-    if (fs.existsSync(cPath)) {
-      try {
-        const stats = fs.statSync(cPath);
-        if (stats.size > 10) return cPath;
-      } catch {
-        // ignore
-      }
     }
   }
 
@@ -119,13 +122,14 @@ export function getResolvedCookiePath(): string | null {
 
 /**
  * Detects Node executable path for explicit --js-runtimes configuration.
+ * Prioritizes standard Linux container binary /usr/local/bin/node.
  */
 export function getNodeExecutablePath(): string {
-  if (process.execPath && fs.existsSync(process.execPath)) {
-    return process.execPath;
-  }
   if (fs.existsSync('/usr/local/bin/node')) {
     return '/usr/local/bin/node';
+  }
+  if (process.execPath && fs.existsSync(process.execPath)) {
+    return process.execPath;
   }
   if (fs.existsSync('/usr/bin/node')) {
     return '/usr/bin/node';
@@ -301,14 +305,13 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
   const args = [
     '--dump-single-json',
     ...buildBaseYtDlpArgs(),
-    '--',
     url,
   ];
 
   return new Promise((resolve, reject) => {
     const child = spawn(ytdlp.path, args, {
       timeout: 30000,
-      env: { ...process.env, PYTHONUNBUFFERED: '1', YTDLP_JS_ENGINE: 'node' },
+      env: { ...process.env, PYTHONUNBUFFERED: '1' },
     });
 
     let stdoutData = '';
@@ -548,7 +551,7 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
     args.push('--merge-output-format', 'mp4');
   }
 
-  args.push('--', url);
+  args.push(url);
 
   return new Promise((resolve, reject) => {
     onProgress?.({
@@ -559,7 +562,7 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
 
     const child = spawn(ytdlp.path, args, {
       timeout: 10 * 60 * 1000,
-      env: { ...process.env, PYTHONUNBUFFERED: '1', YTDLP_JS_ENGINE: 'node' },
+      env: { ...process.env, PYTHONUNBUFFERED: '1' },
     });
 
     let stderrData = '';

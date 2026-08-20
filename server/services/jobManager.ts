@@ -49,10 +49,14 @@ class JobManager {
     title: string;
     thumbnail: string;
     type: MediaType;
+    isPremium?: boolean;
+    userPlan?: 'free' | 'premium' | 'premium_plus';
   }): ConversionJob {
     this.resetDailyStatsIfNeeded();
     const jobId = crypto.randomBytes(12).toString('hex');
     const now = Date.now();
+    const isPremium = Boolean(params.isPremium);
+    const userPlan = params.userPlan || (isPremium ? 'premium' : 'free');
 
     const job: ConversionJob = {
       jobId,
@@ -63,10 +67,15 @@ class JobManager {
       quality: params.quality,
       type: params.type,
       state: 'queued',
+      userPlan,
+      isPremium,
       progress: {
         percentage: 0,
         stage: 'queued',
-        stageMessage: 'İşlem sıraya alındı...',
+        stageMessage: isPremium
+          ? '⚡ VIP Turbo Sıra: Anında bağlanılıyor...'
+          : 'Standart İndirme Sırası: Yoğunluk kuyruğunda bekleniyor...',
+        queuePosition: isPremium ? 0 : 3,
       },
       createdAt: now,
       updatedAt: now,
@@ -104,16 +113,33 @@ class JobManager {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
-    // Check concurrency
-    if (this.getActiveJobsCount() > MAX_CONCURRENT_JOBS) {
-      job.progress.stageMessage = 'Yoğunluk nedeniyle sıraya alındı, birazdan başlayacak...';
-      this.jobs.set(jobId, job);
+    // Standard Free Tier Queue Throttle (Simulation: 4.5s queue delay with status updates)
+    if (!job.isPremium) {
+      // Step 1: Queue position #3
+      await new Promise((r) => setTimeout(r, 2200));
+      const jobStep1 = this.jobs.get(jobId);
+      if (!jobStep1 || jobStep1.state === 'failed') return;
+      jobStep1.progress = {
+        percentage: 3,
+        stage: 'queued',
+        stageMessage: 'Standart İndirme Sırası: Sunucu hazırlanıyor (Sıra #1)...',
+        queuePosition: 1,
+      };
+      jobStep1.updatedAt = Date.now();
+
+      // Step 2: Queue position #1
+      await new Promise((r) => setTimeout(r, 2000));
+      const jobStep2 = this.jobs.get(jobId);
+      if (!jobStep2 || jobStep2.state === 'failed') return;
     }
 
     job.state = 'downloading';
     job.progress.stage = 'downloading';
     job.progress.percentage = 5;
-    job.progress.stageMessage = 'Medya indiriliyor...';
+    job.progress.stageMessage = job.isPremium
+      ? '⚡ VIP Turbo Hat Bağlandı: Maksimum Hızda İndiriliyor...'
+      : 'Medya indiriliyor (Standart Hız Modu)...';
+    job.progress.queuePosition = 0;
     job.updatedAt = Date.now();
 
     try {
@@ -123,6 +149,8 @@ class JobManager {
         quality: job.quality,
         jobId: job.jobId,
         outputDir: TEMP_DIR,
+        isPremium: job.isPremium,
+        userPlan: job.userPlan,
         onProgress: (progress: JobProgress) => {
           const currentJob = this.jobs.get(jobId);
           if (currentJob && currentJob.state !== 'failed') {

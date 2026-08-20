@@ -162,6 +162,36 @@ async function runTests() {
   delete process.env.YTDLP_COOKIE_CONTENT;
   delete process.env.YTDLP_PROXY;
 
+  // 8. Free vs Premium Kuyruk ve Hız Ayrımı Testi
+  console.log('\n[8] Free vs Premium Kuyruk ve Hız Ayrımı Testleri');
+  const freeJob = jobManager.createJob({
+    url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+    format: 'mp4',
+    quality: '720p',
+    title: 'Free User Download',
+    thumbnail: 'https://img.youtube.com/vi/aqz-KE-bpKQ/maxresdefault.jpg',
+    type: 'video',
+    isPremium: false,
+    userPlan: 'free',
+  });
+  assert(freeJob.userPlan === 'free', 'Free kullanıcı planı doğru atandı');
+  assert(freeJob.isPremium === false, 'Free kullanıcı için isPremium false olarak işaretlendi');
+  assert(freeJob.progress.queuePosition === 3, 'Free kullanıcı yoğunluk kuyruğuna alındı (Sıra #3)');
+
+  const premiumJob = jobManager.createJob({
+    url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+    format: 'mp4',
+    quality: '1080p',
+    title: 'Premium VIP User Download',
+    thumbnail: 'https://img.youtube.com/vi/aqz-KE-bpKQ/maxresdefault.jpg',
+    type: 'video',
+    isPremium: true,
+    userPlan: 'premium',
+  });
+  assert(premiumJob.userPlan === 'premium', 'Premium kullanıcı planı doğru atandı');
+  assert(premiumJob.isPremium === true, 'Premium kullanıcı için isPremium true olarak işaretlendi');
+  assert(premiumJob.progress.queuePosition === 0, 'Premium kullanıcı için kuyruk beklemesi 0 (anında)');
+
   console.log(`\n========================================`);
   console.log(`📊 Test Sonuçları: ${passed} Başarılı, ${failed} Başarısız`);
   console.log(`========================================\n`);

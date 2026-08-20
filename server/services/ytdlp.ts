@@ -644,6 +644,8 @@ export interface DownloadMediaOptions {
   quality: string;
   jobId: string;
   outputDir: string;
+  isPremium?: boolean;
+  userPlan?: 'free' | 'premium' | 'premium_plus';
   onProgress?: (progress: {
     percentage: number;
     stage: 'queued' | 'downloading' | 'converting' | 'packaging' | 'ready';
@@ -652,6 +654,7 @@ export interface DownloadMediaOptions {
     eta?: string;
     downloadedBytes?: number;
     totalBytes?: number;
+    queuePosition?: number;
   }) => void;
 }
 
@@ -663,7 +666,7 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
   fileName: string;
   fileSizeBytes: number;
 }> {
-  const { url, format, quality, jobId, outputDir, onProgress } = options;
+  const { url, format, quality, jobId, outputDir, isPremium, userPlan, onProgress } = options;
 
   const ytdlp = await findYtDlp();
   if (!ytdlp) {
@@ -683,6 +686,15 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
     '--newline',
     '--output', outputTemplate,
   ];
+
+  // Free vs Premium Speed Throttling
+  if (!isPremium) {
+    // Standart Free users have a bandwidth throttle (~850 KB/s) for realistic tiers
+    args.push('--limit-rate', '850K');
+  } else if (userPlan === 'premium_plus') {
+    // VIP Plus users get maximum concurrent fragments
+    args.push('--concurrent-fragments', '4');
+  }
 
   if (ffmpeg) {
     args.push('--ffmpeg-location', ffmpeg.path);

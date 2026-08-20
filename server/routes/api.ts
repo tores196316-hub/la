@@ -126,20 +126,26 @@ apiRouter.post('/download', async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+    // User authentication & plan resolution
+    const authUser = userService.verifyToken(req.headers.authorization);
+    const isPremiumActive = Boolean(
+      authUser &&
+      authUser.plan !== 'free' &&
+      (!authUser.premiumExpiresAt || authUser.premiumExpiresAt > Date.now())
+    );
+    const userPlan: 'free' | 'premium' | 'premium_plus' = isPremiumActive
+      ? (authUser?.plan as 'premium' | 'premium_plus') || 'premium'
+      : 'free';
+
     // 2K (1440p) and 4K (2160p) Premium authorization guard
     const isUltraQuality = quality === '1440p' || quality === '2160p' || quality === '4k' || quality.includes('1440') || quality.includes('2160');
-    if (isUltraQuality) {
-      const authUser = userService.verifyToken(req.headers.authorization);
-      const isPremiumActive = authUser && authUser.plan !== 'free' && (!authUser.premiumExpiresAt || authUser.premiumExpiresAt > Date.now());
-      
-      if (!isPremiumActive) {
-        res.status(403).json({
-          success: false,
-          error: '2K ve 4K indirmeler IMGIVO Premium üyelerine özeldir. Lütfen paketinizi yükseltin.',
-          requiresPremium: true,
-        });
-        return;
-      }
+    if (isUltraQuality && !isPremiumActive) {
+      res.status(403).json({
+        success: false,
+        error: '2K ve 4K indirmeler IMGIVO Premium üyelerine özeldir. Lütfen paketinizi yükseltin.',
+        requiresPremium: true,
+      });
+      return;
     }
 
     const isAudio = format === 'mp3' || format === 'm4a';
@@ -150,12 +156,18 @@ apiRouter.post('/download', async (req: Request, res: Response): Promise<void> =
       title: title || 'IMGIVO Medya',
       thumbnail: thumbnail || '',
       type: isAudio ? 'audio' : 'video',
+      isPremium: isPremiumActive,
+      userPlan,
     });
 
     res.json({
       success: true,
       jobId: job.jobId,
-      message: 'Dönüştürme işlemi başlatıldı.',
+      isPremium: isPremiumActive,
+      userPlan,
+      message: isPremiumActive
+        ? '⚡ VIP Turbo indirme işlemi başlatıldı.'
+        : 'Standart dönüştürme işlemi sıraya alındı.',
     });
   } catch (err: any) {
     res.status(500).json({
@@ -200,6 +212,8 @@ apiRouter.get('/jobs/:jobId', (req: Request, res: Response): void => {
       type: job.type,
       state: job.state,
       progress: job.progress,
+      isPremium: job.isPremium,
+      userPlan: job.userPlan,
       fileName: job.fileName,
       fileSizeBytes: job.fileSizeBytes,
       error: job.error,

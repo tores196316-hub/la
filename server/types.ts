@@ -44,6 +44,7 @@ export interface JobProgress {
   eta?: string;
   downloadedBytes?: number;
   totalBytes?: number;
+  queuePosition?: number;
 }
 
 export interface ConversionJob {
@@ -56,6 +57,8 @@ export interface ConversionJob {
   type: MediaType;
   state: JobState;
   progress: JobProgress;
+  userPlan?: 'free' | 'premium' | 'premium_plus';
+  isPremium?: boolean;
   filePath?: string;
   fileName?: string;
   fileSize?: number;

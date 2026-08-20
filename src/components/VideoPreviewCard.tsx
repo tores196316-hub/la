@@ -250,7 +250,7 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
       </div>
 
       {/* Action Row */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3.5 border-t border-white/[0.07]">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3.5 border-t border-white/[0.07]">
         <button
           type="button"
           onClick={onReset}
@@ -260,25 +260,38 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
           Farklı Video Gir
         </button>
 
-        <button
-          type="button"
-          onClick={handleConvertClick}
-          disabled={!selectedFormat || isSubmitting}
-          className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-white hover:bg-slate-200 text-black text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-black" />
-              <span>Hazırlanıyor...</span>
-            </>
-          ) : (
-            <>
-              <span>Dönüştürmeyi Başlat</span>
-              <span className="text-[11px] font-normal text-slate-700">({selectedFormat?.format.toUpperCase()} • {selectedFormat?.quality})</span>
-              <ArrowRight className="h-3.5 w-3.5 text-black" />
-            </>
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          {!isPremium && (
+            <span className="hidden md:inline-block text-[11px] text-slate-400">
+              Standart Hız Modu (Kuyruk ile)
+            </span>
           )}
-        </button>
+
+          <button
+            type="button"
+            onClick={handleConvertClick}
+            disabled={!selectedFormat || isSubmitting}
+            className={`w-full sm:w-auto px-6 py-2.5 rounded-lg text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 ${
+              isPremium
+                ? 'bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 text-black shadow-lg shadow-amber-500/10'
+                : 'bg-white hover:bg-slate-200 text-black'
+            }`}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-black" />
+                <span>Hazırlanıyor...</span>
+              </>
+            ) : (
+              <>
+                {isPremium && <Crown className="w-3.5 h-3.5 text-black" />}
+                <span>{isPremium ? 'VIP Turbo İndir' : 'Dönüştürmeyi Başlat'}</span>
+                <span className="text-[11px] font-normal opacity-80">({selectedFormat?.format.toUpperCase()} • {selectedFormat?.quality})</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

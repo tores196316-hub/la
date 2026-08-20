@@ -42,7 +42,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
         }
       }
     } catch {
-      // Fallback
+      // Fallback if clipboard permission is not granted
     }
   };
 
@@ -59,28 +59,25 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto text-center space-y-8 pt-2 sm:pt-6">
-      {/* Badge */}
+      {/* Premium Badge */}
       <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-950/40 px-4 py-1.5 text-xs font-semibold text-cyan-300 shadow-sm shadow-cyan-950/50">
         <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-        <span>Gerçek Zamanlı Medya İşleme ve Yüksek Kalite</span>
+        <span>Hızlı ve Yüksek Kaliteli Medya Dönüştürücü</span>
       </div>
 
       {/* Main Hero Headlines */}
-      <div className="space-y-3 px-2">
-        <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">
-          Videonu dönüştür. <br className="hidden sm:inline" />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500">
-            İstediğin kalitede indir.
-          </span>
+      <div className="space-y-3.5 px-2">
+        <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-white leading-tight">
+          Videonu <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500">istediğin kalitede</span> indir.
         </h1>
         <p className="text-sm sm:text-base md:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          YouTube videolarını hızlı, güvenli ve yüksek kalitede MP4 veya ses formatına dönüştür.
+          YouTube videolarını hızlı ve yüksek kalitede dönüştür.
         </p>
       </div>
 
       {/* Input Box Area */}
       <div className="relative max-w-3xl mx-auto">
-        <div className="relative flex flex-col sm:flex-row items-stretch gap-2.5 p-2 rounded-2xl bg-slate-900/90 border border-slate-800/90 focus-within:border-cyan-500/80 focus-within:ring-4 focus-within:ring-cyan-500/10 shadow-2xl transition-all">
+        <div className="relative flex flex-col sm:flex-row items-stretch gap-2.5 p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800/90 focus-within:border-cyan-500/80 focus-within:ring-4 focus-within:ring-cyan-500/15 shadow-2xl transition-all">
           <div className="flex items-center flex-1 min-w-0 pl-3 pr-2 py-1 gap-2.5">
             <div className="p-1.5 rounded-lg bg-red-950/60 border border-red-900/40 text-red-500 shrink-0">
               <Youtube className="h-5 w-5" />
@@ -90,7 +87,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="YouTube video veya Shorts bağlantısını yapıştırın..."
+              placeholder="YouTube video URL'sini yapıştır..."
               disabled={isLoading}
               className="w-full bg-transparent text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none disabled:opacity-60 font-medium"
             />
@@ -98,7 +95,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setUrl('')}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors shrink-0"
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
                 title="Temizle"
               >
                 <X className="h-4 w-4" />
@@ -108,7 +105,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
               type="button"
               onClick={handlePaste}
               disabled={isLoading}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700/80 transition-all shrink-0 flex items-center gap-1.5 active:scale-95 shadow-sm"
+              className="px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700/80 transition-all shrink-0 flex items-center gap-1.5 active:scale-95 shadow-sm cursor-pointer"
               title="Panodan Yapıştır"
             >
               <Clipboard className="h-3.5 w-3.5 text-cyan-400" />
@@ -153,7 +150,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
               type="button"
               onClick={() => handleSampleClick(sample.url)}
               disabled={isLoading}
-              className="px-3 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-300 transition-all text-xs font-medium"
+              className="px-3 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-300 transition-all text-xs font-medium cursor-pointer"
             >
               {sample.title}
             </button>
@@ -173,7 +170,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
               </div>
               <h3 className="text-base font-bold text-white">⚡ Hızlı</h3>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Gerçek zamanlı medya işleme ve yüksek hızlı indirme altyapısı ile saniyeler içinde hazır.
+                Hızlı medya işleme.
               </p>
             </div>
 
@@ -184,7 +181,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
               </div>
               <h3 className="text-base font-bold text-white">🎬 Yüksek Kalite</h3>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                1080p Full HD, 2K ve 4K gibi kaynak videonun sunduğu en net ve yüksek kalite seçenekleri.
+                Mevcut yüksek çözünürlük seçenekleri.
               </p>
             </div>
 
@@ -195,7 +192,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
               </div>
               <h3 className="text-base font-bold text-white">🔒 Güvenli</h3>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Geçici dosya izolasyonu ve otomatik silinen temizlik mekanizması ile tam gizlilik.
+                Güvenli işlem altyapısı.
               </p>
             </div>
           </div>
@@ -223,7 +220,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-bold font-mono">02</span>
                   <Sliders className="h-4 w-4 text-slate-500" />
                 </div>
-                <h4 className="text-sm font-bold text-slate-200">2. Formatı Seç</h4>
+                <h4 className="text-sm font-bold text-slate-200">2. Kaliteyi Seç</h4>
                 <p className="text-xs text-slate-400 leading-relaxed">MP4 video (1080p, 4K) veya MP3 ses seçeneklerinden birini belirleyin.</p>
               </div>
 
@@ -241,8 +238,8 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-bold font-mono">04</span>
                   <Download className="h-4 w-4 text-slate-500" />
                 </div>
-                <h4 className="text-sm font-bold text-slate-200">4. Dosyayı İndir</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">Hazırlanan dosyanızı tek tıkla doğrudan telefonunuza veya bilgisayarınıza indirin.</p>
+                <h4 className="text-sm font-bold text-slate-200">4. İndir</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">Hazırlanan dosyanızı tek tıkla doğrudan cihazınıza indirin.</p>
               </div>
             </div>
           </div>
@@ -251,4 +248,5 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
     </div>
   );
 };
+
 

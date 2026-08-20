@@ -1,6 +1,6 @@
 import React from 'react';
 import { JobData } from '../types';
-import { Loader2, CheckCircle2, Clock, Zap, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
+import { Loader2, CheckCircle2, Clock, Zap, AlertCircle, RefreshCw, Sparkles, Film, Music } from 'lucide-react';
 
 interface JobProgressCardProps {
   jobData: JobData;
@@ -11,6 +11,7 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ jobData, onRet
   const { progress, state, error, title, format, quality } = jobData;
   const isFailed = state === 'failed';
   const percentage = isFailed ? 0 : Math.min(Math.max(progress.percentage || 10, 5), 98);
+  const isAudio = format === 'mp3' || format === 'm4a';
 
   const stages = [
     { key: 'queued', label: 'Analiz & Sıra' },
@@ -35,7 +36,7 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ jobData, onRet
       {/* Title & Info */}
       <div className="space-y-2 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-cyan-950/80 border border-cyan-700/60 text-cyan-300 uppercase tracking-wide">
-          <Sparkles className="h-3 w-3 text-cyan-400" />
+          {isAudio ? <Music className="h-3 w-3 text-cyan-400" /> : <Film className="h-3 w-3 text-cyan-400" />}
           <span>{format.toUpperCase()} • {quality}</span>
         </div>
         <h2 className="text-base sm:text-xl font-bold text-white line-clamp-1 max-w-xl mx-auto">
@@ -140,4 +141,5 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ jobData, onRet
     </div>
   );
 };
+
 

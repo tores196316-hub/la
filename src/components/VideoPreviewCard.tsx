@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { VideoMetadata, VideoFormatOption } from '../types';
-import { Film, Music, Check, ArrowRight, Clock, Eye, Sparkles, User, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Film, Music, Check, ArrowRight, Clock, Eye, Sparkles, User, ShieldCheck, Loader2 } from 'lucide-react';
 
 interface VideoPreviewCardProps {
   metadata: VideoMetadata;
@@ -17,7 +17,7 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
 }) => {
   const [activeType, setActiveType] = useState<'video' | 'audio'>('video');
   
-  // Filter formats by active type
+  // Filter formats strictly from backend availableFormats
   const formatsForType = metadata.availableFormats.filter((f) => f.type === activeType);
   
   // Default selected format
@@ -43,27 +43,27 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
     }
   };
 
-  // Helper to badge premium resolutions (4K, 2K, 1080p)
+  // Helper to badge premium resolutions
   const getQualityBadge = (option: VideoFormatOption) => {
     const q = option.quality.toLowerCase();
     const lbl = option.label.toLowerCase();
     if (q.includes('2160') || q.includes('4k') || lbl.includes('4k')) {
       return (
-        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-purple-950/80 border border-purple-500/50 text-purple-300 shadow-sm">
+        <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-950/80 border border-purple-500/50 text-purple-300 shadow-sm">
           4K ULTRA HD
         </span>
       );
     }
     if (q.includes('1440') || q.includes('2k') || lbl.includes('2k')) {
       return (
-        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-950/80 border border-indigo-500/50 text-indigo-300 shadow-sm">
+        <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-950/80 border border-indigo-500/50 text-indigo-300 shadow-sm">
           2K QHD
         </span>
       );
     }
     if (q.includes('1080') || lbl.includes('1080')) {
       return (
-        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 shadow-sm">
+        <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 shadow-sm">
           1080p FULL HD
         </span>
       );
@@ -83,7 +83,7 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
     <div className="w-full max-w-4xl mx-auto mt-4 rounded-2xl bg-slate-900/90 border border-slate-800/90 p-5 sm:p-7 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
       {/* Video Details Header Row */}
       <div className="flex flex-col sm:flex-row gap-5 items-start">
-        {/* Thumbnail with duration badge */}
+        {/* Thumbnail with duration badge and subtle overlay */}
         <div className="relative w-full sm:w-64 aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shrink-0 group shadow-lg">
           {metadata.thumbnail ? (
             <img
@@ -97,6 +97,7 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
               <Film className="h-8 w-8" />
             </div>
           )}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent pointer-events-none" />
           <div className="absolute bottom-2 right-2 px-2.5 py-0.5 rounded-md bg-black/85 backdrop-blur-sm text-xs font-semibold text-white flex items-center gap-1 border border-white/10 shadow-sm">
             <Clock className="h-3 w-3 text-cyan-400" />
             <span>{metadata.durationFormatted}</span>
@@ -151,12 +152,12 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
             <p className="text-xs text-slate-400">İndirmek istediğiniz medya türünü ve kalitesini seçin</p>
           </div>
           
-          {/* Video / Audio Switcher */}
+          {/* Segmented Control (Video | Ses) */}
           <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800/90 shrink-0 shadow-inner">
             <button
               type="button"
               onClick={() => handleTypeChange('video')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 activeType === 'video'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
@@ -168,7 +169,7 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
             <button
               type="button"
               onClick={() => handleTypeChange('audio')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 activeType === 'audio'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
@@ -234,7 +235,7 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
           type="button"
           onClick={onReset}
           disabled={isSubmitting}
-          className="w-full sm:w-auto px-5 py-3 rounded-xl border border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white text-sm font-semibold transition-colors"
+          className="w-full sm:w-auto px-5 py-3 rounded-xl border border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white text-sm font-semibold transition-colors cursor-pointer"
         >
           Farklı Video Gir
         </button>
@@ -243,13 +244,23 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
           type="button"
           onClick={handleConvertClick}
           disabled={!selectedFormat || isSubmitting}
-          className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-bold shadow-xl shadow-cyan-900/40 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+          className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-bold shadow-xl shadow-cyan-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
         >
-          <span>Dönüştürmeyi Başlat ({selectedFormat?.format.toUpperCase()} • {selectedFormat?.quality})</span>
-          <ArrowRight className="h-4 w-4" />
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-white" />
+              <span>Hazırlanıyor...</span>
+            </>
+          ) : (
+            <>
+              <span>Dönüştürmeyi Başlat ({selectedFormat?.format.toUpperCase()} • {selectedFormat?.quality})</span>
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
         </button>
       </div>
     </div>
   );
 };
+
 

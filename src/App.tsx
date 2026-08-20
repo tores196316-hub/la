@@ -242,9 +242,9 @@ export default function App() {
   const hasActiveResult = Boolean(metadata || jobData);
 
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white relative overflow-x-hidden">
       {/* Background ambient lighting accents */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-b from-cyan-500/10 via-blue-600/5 to-transparent blur-3xl pointer-events-none -z-10" />
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-b from-cyan-500/10 via-sky-600/5 to-transparent blur-3xl pointer-events-none -z-10" />
 
       {/* Top Navigation */}
       <Header

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { JobData } from '../types';
-import { Download, CheckCircle2, RefreshCw, FileText, HardDrive, ShieldCheck, Sparkles, Check } from 'lucide-react';
+import { Download, CheckCircle2, RefreshCw, FileText, HardDrive, ShieldCheck, Check } from 'lucide-react';
 import { formatBytes } from '../utils/formatters';
 
 interface DownloadReadyCardProps {
@@ -11,17 +11,6 @@ interface DownloadReadyCardProps {
 export const DownloadReadyCard: React.FC<DownloadReadyCardProps> = ({ jobData, onNewConversion }) => {
   const [downloadStarted, setDownloadStarted] = useState(false);
   const downloadUrl = `/api/download/${jobData.jobId}`;
-
-  const handleDownloadClick = () => {
-    setDownloadStarted(true);
-    // Trigger download via existing anchor pattern
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = jobData.fileName || `imgivo_${jobData.jobId}.${jobData.format}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
 
   // Helper for resolution badge
   const is4K = jobData.quality.includes('4k') || jobData.quality.includes('2160');
@@ -121,7 +110,7 @@ export const DownloadReadyCard: React.FC<DownloadReadyCardProps> = ({ jobData, o
         <button
           type="button"
           onClick={onNewConversion}
-          className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-400 hover:text-cyan-300 transition-colors p-2 rounded-lg hover:bg-slate-800/50"
+          className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-400 hover:text-cyan-300 transition-colors p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer"
         >
           <RefreshCw className="h-4 w-4 text-cyan-400" />
           <span>Yeni Bir Video Dönüştür</span>
@@ -130,4 +119,5 @@ export const DownloadReadyCard: React.FC<DownloadReadyCardProps> = ({ jobData, o
     </div>
   );
 };
+
 

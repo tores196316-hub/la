@@ -11,7 +11,7 @@ export const FaqSection: React.FC = () => {
     },
     {
       q: '1080p, 2K ve 4K videolarda ses neden eksik olmaz?',
-      a: 'YouTube 1080p ve üzeri çözünürlükleri video ve ses akışı ayrık olarak depolar. IMGIVO, arka plandaki akıllı FFmpeg motoru sayesinde en yüksek video akışı ile en kaliteli ses akışını kayıpsız bir şekilde birleştirir (merge).',
+      a: 'YouTube 1080p ve üzeri çözünürlükleri video ve ses akışı ayrık olarak depolar. IMGIVO, arka plandaki FFmpeg motoru sayesinde en yüksek video akışı ile en kaliteli ses akışını kayıpsız bir şekilde birleştirir (merge).',
     },
     {
       q: 'YouTube Shorts bağlantıları dönüştürülebilir mi?',
@@ -32,45 +32,45 @@ export const FaqSection: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto mt-4 rounded-2xl bg-slate-900/90 border border-slate-800/90 p-5 sm:p-7 shadow-2xl space-y-6 animate-in fade-in duration-200">
-      <div className="flex items-center gap-3 border-b border-slate-800/90 pb-4 text-left">
-        <div className="p-2.5 rounded-xl bg-cyan-950/70 border border-cyan-800/60 text-cyan-400">
-          <HelpCircle className="h-5 w-5" />
+    <div className="w-full max-w-3xl mx-auto rounded-xl bg-[#0e1017] border border-white/[0.08] p-5 sm:p-6 shadow-xl space-y-4 animate-in fade-in duration-150">
+      <div className="flex items-center gap-2.5 border-b border-white/[0.07] pb-3.5 text-left">
+        <div className="p-2 rounded-lg bg-white/[0.06] text-slate-300">
+          <HelpCircle className="h-4 w-4" />
         </div>
         <div>
-          <h2 className="text-lg sm:text-xl font-bold text-white">Sıkça Sorulan Sorular & Yardım</h2>
-          <p className="text-xs sm:text-sm text-slate-400">IMGIVO kullanımı ve dönüştürme hakkında bilgiler</p>
+          <h2 className="text-sm sm:text-base font-bold text-white">Sıkça Sorulan Sorular</h2>
+          <p className="text-xs text-slate-400">IMGIVO kullanımı ve dönüştürme hakkında bilgiler</p>
         </div>
       </div>
 
       {/* FAQ list */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {faqs.map((faq, idx) => {
           const isOpen = openIndex === idx;
           return (
             <div
               key={idx}
-              className={`rounded-xl border transition-all duration-200 overflow-hidden ${
+              className={`rounded-lg border transition-all duration-150 overflow-hidden ${
                 isOpen
-                  ? 'border-cyan-500/50 bg-slate-950/80 shadow-md'
-                  : 'border-slate-800/80 bg-slate-950/40 hover:border-slate-700/80'
+                  ? 'border-white/20 bg-[#111319]'
+                  : 'border-white/[0.06] bg-[#111319]/50 hover:border-white/10'
               }`}
             >
               <button
                 type="button"
                 onClick={() => toggleFaq(idx)}
-                className="w-full flex items-center justify-between p-4 text-left text-sm sm:text-base font-bold text-slate-200 hover:text-white transition-colors cursor-pointer"
+                className="w-full flex items-center justify-between p-3.5 text-left text-xs sm:text-sm font-semibold text-slate-200 hover:text-white transition-colors cursor-pointer"
               >
                 <span className="pr-3 leading-snug">{faq.q}</span>
                 {isOpen ? (
-                  <ChevronUp className="h-4 w-4 text-cyan-400 shrink-0" />
+                  <ChevronUp className="h-3.5 w-3.5 text-slate-300 shrink-0" />
                 ) : (
-                  <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
                 )}
               </button>
 
               {isOpen && (
-                <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-slate-400 leading-relaxed border-t border-slate-900 animate-in fade-in duration-150 text-left">
+                <div className="px-3.5 pb-3.5 pt-1 text-xs text-slate-400 leading-relaxed border-t border-white/[0.04] text-left">
                   {faq.a}
                 </div>
               )}
@@ -80,9 +80,9 @@ export const FaqSection: React.FC = () => {
       </div>
 
       {/* Legal and Disclaimer Notice */}
-      <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-800/40 text-left space-y-2">
-        <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
+      <div className="p-3.5 rounded-lg bg-amber-500/[0.04] border border-amber-500/10 text-left space-y-1.5">
+        <div className="flex items-center gap-1.5 text-amber-400/90 text-[11px] font-semibold uppercase tracking-wider">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           <span>Yasal Uyarı & Kullanım Şartları</span>
         </div>
         <p className="text-xs text-slate-400 leading-relaxed">
@@ -92,4 +92,5 @@ export const FaqSection: React.FC = () => {
     </div>
   );
 };
+
 

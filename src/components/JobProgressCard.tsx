@@ -1,6 +1,6 @@
 import React from 'react';
 import { JobData } from '../types';
-import { Loader2, CheckCircle2, Clock, Zap, AlertCircle, RefreshCw, Sparkles, Film, Music } from 'lucide-react';
+import { Loader2, Check, AlertCircle, RefreshCw, Film, Music } from 'lucide-react';
 
 interface JobProgressCardProps {
   jobData: JobData;
@@ -32,39 +32,39 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ jobData, onRet
   const currentStep = getCurrentStepIndex();
 
   return (
-    <div className="w-full max-w-3xl mx-auto mt-4 rounded-2xl bg-slate-900/95 border border-slate-800/90 p-6 sm:p-8 shadow-2xl space-y-7 animate-in fade-in duration-200">
+    <div className="w-full max-w-2xl mx-auto rounded-xl bg-[#0e1017] border border-white/[0.08] p-5 sm:p-6 shadow-xl space-y-5 animate-in fade-in duration-150">
       {/* Title & Info */}
-      <div className="space-y-2 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-cyan-950/80 border border-cyan-700/60 text-cyan-300 uppercase tracking-wide">
-          {isAudio ? <Music className="h-3 w-3 text-cyan-400" /> : <Film className="h-3 w-3 text-cyan-400" />}
+      <div className="space-y-1.5 text-center">
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-white/[0.06] border border-white/[0.08] text-slate-300 uppercase">
+          {isAudio ? <Music className="h-3 w-3 text-slate-400" /> : <Film className="h-3 w-3 text-slate-400" />}
           <span>{format.toUpperCase()} • {quality}</span>
         </div>
-        <h2 className="text-base sm:text-xl font-bold text-white line-clamp-1 max-w-xl mx-auto">
+        <h2 className="text-sm sm:text-base font-bold text-white line-clamp-1 max-w-lg mx-auto">
           {title}
         </h2>
       </div>
 
       {/* Progress Steps Header */}
-      <div className="grid grid-cols-4 gap-2 text-center text-xs pt-2">
+      <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
         {stages.map((stg, idx) => {
           const isDone = currentStep > idx;
           const isCurrent = currentStep === idx && !isFailed;
           return (
-            <div key={stg.key} className="space-y-2 flex flex-col items-center">
+            <div key={stg.key} className="space-y-1.5 flex flex-col items-center">
               <div
-                className={`h-8 w-8 rounded-xl flex items-center justify-center text-xs font-bold transition-all shadow-md ${
+                className={`h-6 w-6 rounded-md flex items-center justify-center text-[11px] font-mono font-bold transition-all ${
                   isDone
-                    ? 'bg-emerald-500 text-white shadow-emerald-900/40'
+                    ? 'bg-white/20 text-white'
                     : isCurrent
-                    ? 'bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-cyan-500/40 ring-4 ring-cyan-500/20 animate-pulse'
-                    : 'bg-slate-800/80 text-slate-500 border border-slate-700/60'
+                    ? 'bg-white text-black'
+                    : 'bg-white/[0.04] text-slate-500 border border-white/[0.06]'
                 }`}
               >
-                {isDone ? <CheckCircle2 className="h-4 w-4" /> : idx + 1}
+                {isDone ? <Check className="h-3 w-3" /> : idx + 1}
               </div>
               <span
-                className={`text-[11px] sm:text-xs font-semibold ${
-                  isCurrent ? 'text-cyan-300' : isDone ? 'text-slate-300' : 'text-slate-500'
+                className={`text-[10px] font-medium truncate max-w-full ${
+                  isCurrent ? 'text-white' : isDone ? 'text-slate-300' : 'text-slate-500'
                 }`}
               >
                 {stg.label}
@@ -75,23 +75,23 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ jobData, onRet
       </div>
 
       {/* Main Progress Bar */}
-      <div className="space-y-2.5 pt-2">
-        <div className="flex justify-between items-center text-xs font-semibold">
-          <span className="text-slate-300 flex items-center gap-2">
-            {!isFailed && <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />}
+      <div className="space-y-2 pt-1">
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-slate-400 flex items-center gap-2">
+            {!isFailed && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-300" />}
             <span>{progress.stageMessage || 'İşleniyor...'}</span>
           </span>
-          <span className="text-cyan-400 font-mono text-sm font-bold">
+          <span className="text-white font-mono text-xs font-bold">
             {isFailed ? '0%' : `%${percentage}`}
           </span>
         </div>
 
-        <div className="w-full h-3.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800 p-0.5 shadow-inner">
+        <div className="w-full h-2 rounded-full bg-[#111319] overflow-hidden border border-white/[0.06]">
           <div
             className={`h-full rounded-full transition-all duration-300 ${
               isFailed
                 ? 'bg-red-500'
-                : 'bg-gradient-to-r from-cyan-500 via-sky-400 to-blue-500 shadow-md shadow-cyan-500/50'
+                : 'bg-white'
             }`}
             style={{ width: `${percentage}%` }}
           />
@@ -100,17 +100,15 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ jobData, onRet
 
       {/* Speed & ETA Badges */}
       {(progress.downloadSpeed || progress.eta) && !isFailed && (
-        <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-mono text-slate-400 pt-1">
+        <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-slate-400">
           {progress.downloadSpeed && (
-            <span className="flex items-center gap-1.5 bg-slate-950/90 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-300">
-              <Zap className="h-3.5 w-3.5 text-cyan-400" />
-              <span>Hız: <strong className="text-white">{progress.downloadSpeed}</strong></span>
+            <span className="bg-[#111319] px-2.5 py-1 rounded-md border border-white/[0.06] text-slate-300">
+              Hız: <strong className="text-white">{progress.downloadSpeed}</strong>
             </span>
           )}
           {progress.eta && (
-            <span className="flex items-center gap-1.5 bg-slate-950/90 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-300">
-              <Clock className="h-3.5 w-3.5 text-cyan-400" />
-              <span>Tahmini Kalan Süre: <strong className="text-white">{progress.eta}</strong></span>
+            <span className="bg-[#111319] px-2.5 py-1 rounded-md border border-white/[0.06] text-slate-300">
+              Kalan Süre: <strong className="text-white">{progress.eta}</strong>
             </span>
           )}
         </div>
@@ -118,22 +116,22 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ jobData, onRet
 
       {/* Error state */}
       {isFailed && (
-        <div className="p-4 rounded-xl bg-red-950/60 border border-red-800/80 text-left space-y-3.5 shadow-lg">
-          <div className="flex items-start gap-3 text-red-300 text-sm">
-            <AlertCircle className="h-5 w-5 shrink-0 text-red-400 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-bold text-red-200">İndirme sırasında bir sorun oluştu</p>
-              <p className="text-xs text-red-300/90 leading-relaxed">
-                {error || 'Sunucu işlemi tamamlarken bir hata ile karşılaştı. Lütfen tekrar deneyin.'}
+        <div className="p-3.5 rounded-lg bg-red-950/30 border border-red-800/50 text-left space-y-2.5">
+          <div className="flex items-start gap-2.5 text-red-300 text-xs">
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
+            <div className="space-y-0.5">
+              <p className="font-semibold text-red-200">İndirme başarısız oldu</p>
+              <p className="text-red-300/90 leading-relaxed">
+                {error || 'Sunucu işlemi tamamlarken bir hata ile karşılaştı.'}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onRetry}
-            className="px-4 py-2 rounded-lg bg-red-800 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md cursor-pointer active:scale-95"
+            className="px-3 py-1.5 rounded-md bg-white hover:bg-slate-200 text-black text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className="h-3 w-3" />
             <span>Tekrar Dene</span>
           </button>
         </div>
@@ -141,5 +139,6 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ jobData, onRet
     </div>
   );
 };
+
 
 

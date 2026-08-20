@@ -242,9 +242,9 @@ export default function App() {
   const hasActiveResult = Boolean(metadata || jobData);
 
   return (
-    <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white relative overflow-x-hidden">
-      {/* Background ambient lighting accents */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[350px] bg-gradient-to-b from-cyan-500/10 via-sky-600/5 to-transparent blur-3xl pointer-events-none -z-10" />
+    <div className="min-h-screen bg-[#08090c] text-slate-100 flex flex-col selection:bg-slate-700 selection:text-white relative overflow-x-hidden">
+      {/* Background ambient lighting accents - subtle, clean */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[700px] h-[220px] bg-slate-800/10 blur-[100px] pointer-events-none -z-10" />
 
       {/* Top Navigation */}
       <Header
@@ -254,7 +254,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-8 z-0">
+      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-8 z-0">
         {activeTab === 'converter' && (
           <div className="space-y-6">
             {/* 1. URL Input */}

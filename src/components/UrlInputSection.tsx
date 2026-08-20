@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Youtube, Clipboard, X, Loader2, Sparkles, Zap, Film, ShieldCheck, Link2, Sliders, PlayCircle, Download } from 'lucide-react';
+import { Search, Youtube, Clipboard, X, Loader2, Zap, Sparkles, ShieldCheck, ArrowRight } from 'lucide-react';
 
 interface UrlInputSectionProps {
   url: string;
@@ -9,17 +9,6 @@ interface UrlInputSectionProps {
   error?: string | null;
   hasActiveResult?: boolean;
 }
-
-const SAMPLE_VIDEOS = [
-  {
-    title: 'Örnek 1: Rick Astley (4K / 1080p)',
-    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-  },
-  {
-    title: 'Örnek 2: Blender Sintel (Açık Film)',
-    url: 'https://www.youtube.com/watch?v=eRsGyueVLvQ',
-  },
-];
 
 export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
   url,
@@ -52,35 +41,30 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
     }
   };
 
-  const handleSampleClick = (sampleUrl: string) => {
-    setUrl(sampleUrl);
-    onAnalyze(sampleUrl);
-  };
-
   return (
-    <div className="w-full max-w-4xl mx-auto text-center space-y-8 pt-2 sm:pt-6">
-      {/* Premium Badge */}
-      <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-950/40 px-4 py-1.5 text-xs font-semibold text-cyan-300 shadow-sm shadow-cyan-950/50">
-        <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-        <span>Hızlı ve Yüksek Kaliteli Medya Dönüştürücü</span>
+    <div className="w-full max-w-3xl mx-auto text-center space-y-6 pt-2 sm:pt-4">
+      {/* Badge */}
+      <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#111319] px-3.5 py-1 text-[11px] font-medium text-slate-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+        <span className="tracking-wide">FAST • PRIVATE • HIGH QUALITY</span>
       </div>
 
       {/* Main Hero Headlines */}
-      <div className="space-y-3.5 px-2">
-        <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-white leading-tight">
-          Videonu <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500">istediğin kalitede</span> indir.
+      <div className="space-y-2 px-2">
+        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
+          Videonu <span className="text-slate-100 underline decoration-slate-600 underline-offset-4">istediğin kalitede</span> indir.
         </h1>
-        <p className="text-sm sm:text-base md:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          YouTube videolarını hızlı ve yüksek kalitede dönüştür.
+        <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
+          YouTube videolarını saniyeler içinde yüksek kaliteli video veya sese dönüştür.
         </p>
       </div>
 
       {/* Input Box Area */}
-      <div className="relative max-w-3xl mx-auto">
-        <div className="relative flex flex-col sm:flex-row items-stretch gap-2.5 p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800/90 focus-within:border-cyan-500/80 focus-within:ring-4 focus-within:ring-cyan-500/15 shadow-2xl transition-all">
-          <div className="flex items-center flex-1 min-w-0 pl-3 pr-2 py-1 gap-2.5">
-            <div className="p-1.5 rounded-lg bg-red-950/60 border border-red-900/40 text-red-500 shrink-0">
-              <Youtube className="h-5 w-5" />
+      <div className="relative max-w-2xl mx-auto">
+        <div className="relative flex flex-col sm:flex-row items-stretch gap-2 p-1.5 rounded-xl bg-[#111319] border border-white/[0.08] focus-within:border-white/20 transition-all shadow-lg">
+          <div className="flex items-center flex-1 min-w-0 pl-2.5 pr-1 py-1 gap-2">
+            <div className="p-1 rounded-md bg-red-500/10 text-red-400 shrink-0">
+              <Youtube className="h-4 w-4" />
             </div>
             <input
               type="text"
@@ -89,26 +73,26 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
               onKeyDown={handleKeyDown}
               placeholder="YouTube video URL'sini yapıştır..."
               disabled={isLoading}
-              className="w-full bg-transparent text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none disabled:opacity-60 font-medium"
+              className="w-full bg-transparent text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none disabled:opacity-60 font-medium"
             />
             {url && !isLoading && (
               <button
                 type="button"
                 onClick={() => setUrl('')}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
+                className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.06] transition-colors shrink-0 cursor-pointer"
                 title="Temizle"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
             <button
               type="button"
               onClick={handlePaste}
               disabled={isLoading}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700/80 transition-all shrink-0 flex items-center gap-1.5 active:scale-95 shadow-sm cursor-pointer"
+              className="px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.1] rounded-lg border border-white/[0.08] transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
               title="Panodan Yapıştır"
             >
-              <Clipboard className="h-3.5 w-3.5 text-cyan-400" />
+              <Clipboard className="h-3 w-3 text-slate-400" />
               <span className="hidden sm:inline">{pasteSuccess ? 'Yapıştırıldı' : 'Yapıştır'}</span>
             </button>
           </div>
@@ -117,16 +101,16 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
             type="button"
             onClick={() => onAnalyze()}
             disabled={isLoading || !url.trim()}
-            className="w-full sm:w-auto px-7 py-3.5 sm:py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-bold shadow-lg shadow-cyan-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer active:scale-98"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-white hover:bg-slate-200 text-black text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer active:scale-98"
           >
             {isLoading ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-black" />
                 <span>Analiz Ediliyor...</span>
               </>
             ) : (
               <>
-                <Search className="h-4 w-4 text-white" />
+                <Search className="h-3.5 w-3.5 text-black" />
                 <span>Analiz Et</span>
               </>
             )}
@@ -135,111 +119,87 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
 
         {/* Error notification */}
         {error && (
-          <div className="mt-3.5 p-3.5 rounded-xl bg-red-950/60 border border-red-800/80 text-red-300 text-sm text-left flex items-start gap-2.5 animate-in fade-in duration-200 shadow-lg">
+          <div className="mt-3 p-3 rounded-lg bg-red-950/40 border border-red-800/60 text-red-300 text-xs text-left flex items-start gap-2 animate-in fade-in duration-150">
             <span className="font-semibold shrink-0 text-red-400">Hata:</span>
             <span className="leading-relaxed">{error}</span>
           </div>
         )}
-
-        {/* Quick sample videos */}
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-400">
-          <span className="text-slate-500 font-medium">Hızlı Test:</span>
-          {SAMPLE_VIDEOS.map((sample, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => handleSampleClick(sample.url)}
-              disabled={isLoading}
-              className="px-3 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-300 transition-all text-xs font-medium cursor-pointer"
-            >
-              {sample.title}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Feature Cards & Workflow (Only shown when not actively converting or showing preview) */}
+      {/* Feature Strip & Workflow (Only shown when not actively converting or showing preview) */}
       {!hasActiveResult && (
-        <div className="space-y-12 pt-8 sm:pt-12 text-left">
-          {/* 3 Modern Feature Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Card 1 */}
-            <div className="p-5 sm:p-6 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-cyan-500/30 transition-all group space-y-3">
-              <div className="h-10 w-10 rounded-xl bg-cyan-950/60 border border-cyan-800/50 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-transform">
-                <Zap className="h-5 w-5" />
+        <div className="space-y-8 pt-4 sm:pt-6 text-left">
+          {/* Compact Feature Strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#0e1017] border border-white/[0.06]">
+            <div className="flex items-center gap-2.5 px-2 py-1">
+              <div className="p-1.5 rounded-md bg-white/[0.05] text-slate-300 shrink-0">
+                <Zap className="h-3.5 w-3.5 text-amber-400" />
               </div>
-              <h3 className="text-base font-bold text-white">⚡ Hızlı</h3>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Hızlı medya işleme.
-              </p>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white">Hızlı İşlem</p>
+                <p className="text-[11px] text-slate-400 truncate">Saniyeler içinde hazır</p>
+              </div>
             </div>
 
-            {/* Card 2 */}
-            <div className="p-5 sm:p-6 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-blue-500/30 transition-all group space-y-3">
-              <div className="h-10 w-10 rounded-xl bg-blue-950/60 border border-blue-800/50 flex items-center justify-center text-blue-400 group-hover:scale-105 transition-transform">
-                <Film className="h-5 w-5" />
+            <div className="flex items-center gap-2.5 px-2 py-1 sm:border-l sm:border-white/[0.06]">
+              <div className="p-1.5 rounded-md bg-white/[0.05] text-slate-300 shrink-0">
+                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
               </div>
-              <h3 className="text-base font-bold text-white">🎬 Yüksek Kalite</h3>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Mevcut yüksek çözünürlük seçenekleri.
-              </p>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white">Yüksek Kalite</p>
+                <p className="text-[11px] text-slate-400 truncate">1080p, 2K, 4K ve 320k ses</p>
+              </div>
             </div>
 
-            {/* Card 3 */}
-            <div className="p-5 sm:p-6 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-emerald-500/30 transition-all group space-y-3">
-              <div className="h-10 w-10 rounded-xl bg-emerald-950/60 border border-emerald-800/50 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
-                <ShieldCheck className="h-5 w-5" />
+            <div className="flex items-center gap-2.5 px-2 py-1 sm:border-l sm:border-white/[0.06]">
+              <div className="p-1.5 rounded-md bg-white/[0.05] text-slate-300 shrink-0">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
               </div>
-              <h3 className="text-base font-bold text-white">🔒 Güvenli</h3>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Güvenli işlem altyapısı.
-              </p>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white">Güvenli & Gizli</p>
+                <p className="text-[11px] text-slate-400 truncate">Geçici dosyalar temizlenir</p>
+              </div>
             </div>
           </div>
 
-          {/* 4-Step "Nasıl Çalışır?" Section */}
-          <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 space-y-6">
-            <div className="text-center sm:text-left space-y-1">
-              <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest">Rehber</span>
-              <h2 className="text-xl sm:text-2xl font-bold text-white">Nasıl Çalışır?</h2>
-              <p className="text-xs sm:text-sm text-slate-400">4 basit adımda videonuzu cihazınıza kaydedin</p>
+          {/* Compact "Nasıl Çalışır?" Process Timeline */}
+          <div className="p-4 sm:p-5 rounded-xl bg-[#0e1017] border border-white/[0.06] space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Nasıl Çalışır?</h2>
+              <span className="text-[11px] text-slate-500">4 basit adım</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-bold font-mono">01</span>
-                  <Link2 className="h-4 w-4 text-slate-500" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold text-slate-400 bg-white/[0.05] px-1.5 py-0.5 rounded">01</span>
+                  <p className="text-xs font-semibold text-slate-200">Linki Yapıştır</p>
                 </div>
-                <h4 className="text-sm font-bold text-slate-200">1. Linki Yapıştır</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">YouTube video veya Shorts bağlantısını arama kutusuna ekleyin.</p>
+                <p className="text-[11px] text-slate-400 leading-snug">YouTube linkini kutuya ekleyin.</p>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-bold font-mono">02</span>
-                  <Sliders className="h-4 w-4 text-slate-500" />
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold text-slate-400 bg-white/[0.05] px-1.5 py-0.5 rounded">02</span>
+                  <p className="text-xs font-semibold text-slate-200">Kaliteyi Seç</p>
                 </div>
-                <h4 className="text-sm font-bold text-slate-200">2. Kaliteyi Seç</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">MP4 video (1080p, 4K) veya MP3 ses seçeneklerinden birini belirleyin.</p>
+                <p className="text-[11px] text-slate-400 leading-snug">MP4 veya MP3 formatı belirleyin.</p>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-bold font-mono">03</span>
-                  <PlayCircle className="h-4 w-4 text-slate-500" />
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold text-slate-400 bg-white/[0.05] px-1.5 py-0.5 rounded">03</span>
+                  <p className="text-xs font-semibold text-slate-200">Dönüştür</p>
                 </div>
-                <h4 className="text-sm font-bold text-slate-200">3. Dönüştür</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">Gelişmiş motorumuz ses ve görüntüyü yüksek hızda birleştirsin.</p>
+                <p className="text-[11px] text-slate-400 leading-snug">Medya motorumuz dosyayı işlesin.</p>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-bold font-mono">04</span>
-                  <Download className="h-4 w-4 text-slate-500" />
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold text-slate-400 bg-white/[0.05] px-1.5 py-0.5 rounded">04</span>
+                  <p className="text-xs font-semibold text-slate-200">İndir</p>
                 </div>
-                <h4 className="text-sm font-bold text-slate-200">4. İndir</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">Hazırlanan dosyanızı tek tıkla doğrudan cihazınıza indirin.</p>
+                <p className="text-[11px] text-slate-400 leading-snug">Dosyayı doğrudan cihazına kaydet.</p>
               </div>
             </div>
           </div>
@@ -248,5 +208,6 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
     </div>
   );
 };
+
 
 

@@ -124,6 +124,20 @@ async function runTests() {
   assert(res720Only.includes(720), '720p video için 720p korundu');
   assert(!res720Only.includes(1080), '720p videoda sahte 1080p eklenmedi');
 
+  // Test with 360p only (e.g. vintage / low-res video)
+  const mock360pOnlyInfo = {
+    title: 'Sample 360p Only Video',
+    height: 360,
+    width: 640,
+    formats: [
+      { format_id: '18', vcodec: 'avc1.42001E', acodec: 'mp4a.40.2', height: 360, width: 640 },
+    ],
+  };
+  const res360Only = extractAvailableResolutions(mock360pOnlyInfo);
+  assert(res360Only.includes(360), '360p video için 360p algılandı');
+  assert(!res360Only.includes(720), '360p videoda 720p eklenmedi');
+  assert(!res360Only.includes(1080), '360p videoda 1080p eklenmedi');
+
   console.log(`\n========================================`);
   console.log(`📊 Test Sonuçları: ${passed} Başarılı, ${failed} Başarısız`);
   console.log(`========================================\n`);

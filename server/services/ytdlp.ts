@@ -105,8 +105,10 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
         // Determine available video options based on stream availability
         const availableFormats: VideoFormatOption[] = [];
 
-        // Check video resolutions
+        // Check video resolutions (4K, 2K, 1080p, 720p, 480p, 360p)
         const targetHeights = [
+          { height: 2160, label: '4K Ultra HD (2160p)', quality: '2160p' },
+          { height: 1440, label: '2K Quad HD (1440p)', quality: '1440p' },
           { height: 1080, label: '1080p Full HD', quality: '1080p', isBest: true },
           { height: 720, label: '720p HD', quality: '720p' },
           { height: 480, label: '480p Standart', quality: '480p' },
@@ -114,13 +116,13 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
         ];
 
         targetHeights.forEach((t) => {
-          // If video has at least this resolution or if it's 360p/480p
-          const hasQuality = Array.from(videoHeights).some((h) => h >= t.height) || t.height <= 480;
+          // If video has at least this resolution or if it's 360p/480p/720p
+          const hasQuality = Array.from(videoHeights).some((h) => h >= t.height) || t.height <= 720;
           if (hasQuality) {
             // Find approximate filesize if duration is known
             let approxBytes: number | undefined;
             if (duration > 0) {
-              const bitrateKbps = t.height >= 1080 ? 3500 : t.height >= 720 ? 2000 : t.height >= 480 ? 1000 : 600;
+              const bitrateKbps = t.height >= 2160 ? 15000 : t.height >= 1440 ? 8000 : t.height >= 1080 ? 4000 : t.height >= 720 ? 2200 : t.height >= 480 ? 1000 : 600;
               approxBytes = (bitrateKbps * 1000 * duration) / 8;
             }
             availableFormats.push({
@@ -271,22 +273,24 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
     args.push('-x'); // Extract audio
     if (format === 'mp3') {
       args.push('--audio-format', 'mp3');
-      const bitrateValue = quality.replace('k', '') || '192';
-      args.push('--audio-quality', `${bitrateValue}K`);
+      const bitrateValue = quality.replace('k', '') || '320';
+      args.push('--audio-quality', `${bitrateValue}k`);
     } else if (format === 'm4a') {
       args.push('--audio-format', 'm4a');
     }
   } else {
     // Video format
-    let maxH = 720;
-    if (quality === '1080p') maxH = 1080;
+    let maxH = 1080;
+    if (quality === '2160p') maxH = 2160;
+    else if (quality === '1440p') maxH = 1440;
+    else if (quality === '1080p') maxH = 1080;
     else if (quality === '720p') maxH = 720;
     else if (quality === '480p') maxH = 480;
     else if (quality === '360p') maxH = 360;
 
     args.push(
       '-f',
-      `bestvideo[height<=${maxH}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${maxH}]+bestaudio/best[height<=${maxH}]/best`
+      `bestvideo[height<=${maxH}]+bestaudio/best[height<=${maxH}]/bestvideo+bestaudio/best`
     );
     args.push('--merge-output-format', 'mp4');
   }

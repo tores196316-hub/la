@@ -19,6 +19,9 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const isProd = process.env.NODE_ENV === 'production';
 
+// Enable trust proxy for Railway / container reverse proxies
+app.set('trust proxy', 1);
+
 // Security middlewares
 app.use(
   helmet({
@@ -38,12 +41,15 @@ app.use(
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-// Rate limiting
+// Rate limiting configured for reverse proxies
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '60', 10),
   standardHeaders: true,
   legacyHeaders: false,
+  validate: {
+    xForwardedForHeader: false,
+  },
   message: {
     success: false,
     error: 'Çok fazla istek gönderildi. Lütfen biraz bekleyin.',

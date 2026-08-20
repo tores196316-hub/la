@@ -164,6 +164,85 @@ export function parseYtDlpError(rawError: string): Error {
 }
 
 /**
+ * Extracts all available video heights from yt-dlp metadata, including video-only DASH streams,
+ * vertical shorts dimensions, resolution strings, format notes, and known YouTube format IDs.
+ */
+export function extractAvailableResolutions(info: any): number[] {
+  const heights = new Set<number>();
+
+  // Check top-level info dimensions
+  if (typeof info?.height === 'number' && info.height > 0) heights.add(info.height);
+  if (typeof info?.width === 'number' && info.width > 0) {
+    if (info.height && typeof info.height === 'number' && info.height > 0) {
+      heights.add(Math.min(info.width, info.height));
+    } else {
+      heights.add(Math.round((info.width * 9) / 16));
+    }
+  }
+
+  const rawFormats: any[] = Array.isArray(info?.formats) ? info.formats : [];
+
+  for (const f of rawFormats) {
+    // Skip pure audio streams
+    if (f.vcodec === 'none' && !f.height && !f.width) continue;
+
+    // Direct height
+    if (typeof f.height === 'number' && f.height > 0) {
+      heights.add(f.height);
+      // For vertical shorts (e.g. 1080x1920 where height=1920, width=1080)
+      if (typeof f.width === 'number' && f.width > 0) {
+        heights.add(Math.min(f.width, f.height));
+      }
+    }
+
+    // Direct width
+    if (typeof f.width === 'number' && f.width > 0 && (!f.height || f.height <= 0)) {
+      heights.add(Math.round((f.width * 9) / 16));
+    }
+
+    // Parse resolution string e.g. "1920x1080" or "1080x1920"
+    if (typeof f.resolution === 'string') {
+      const match = f.resolution.match(/(\d+)\s*x\s*(\d+)/i);
+      if (match) {
+        const w = parseInt(match[1], 10);
+        const h = parseInt(match[2], 10);
+        if (h > 0) heights.add(h);
+        if (w > 0 && h > 0) heights.add(Math.min(w, h));
+      }
+    }
+
+    // Parse format_note e.g. "1080p", "1080p60", "1080p Premium", "720p60"
+    if (typeof f.format_note === 'string') {
+      const match = f.format_note.match(/(\d+)p/i);
+      if (match) {
+        const h = parseInt(match[1], 10);
+        if (h > 0) heights.add(h);
+      }
+    }
+
+    // Known YouTube 1080p format IDs (video-only DASH mp4/webm/av01)
+    const fid = String(f.format_id || '');
+    if (['137', '248', '399', '614', '299', '303', '335'].includes(fid)) {
+      heights.add(1080);
+    }
+    // Known YouTube 720p format IDs
+    if (['136', '247', '398', '22', '298', '302', '334'].includes(fid)) {
+      heights.add(720);
+    }
+    // Known YouTube 1440p format IDs
+    if (['271', '308', '315', '400', '336'].includes(fid)) {
+      heights.add(1440);
+    }
+    // Known YouTube 2160p (4K) format IDs
+    if (['313', '401', '337'].includes(fid)) {
+      heights.add(2160);
+    }
+  }
+
+  return Array.from(heights);
+}
+
+/**
  * Extracts metadata for a given YouTube URL using yt-dlp.
  */
 export async function extractMetadata(url: string): Promise<VideoMetadata> {
@@ -210,16 +289,9 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
         const info = JSON.parse(stdoutData);
         const duration = typeof info.duration === 'number' ? info.duration : 0;
         
-        // Parse available formats from yt-dlp formats list
-        const rawFormats: any[] = Array.isArray(info.formats) ? info.formats : [];
-        
-        // Find max video height available
-        const videoHeights = new Set<number>();
-        rawFormats.forEach((f) => {
-          if (f.height && typeof f.height === 'number') {
-            videoHeights.add(f.height);
-          }
-        });
+        // Extract all available video resolutions (including video-only DASH streams)
+        const detectedHeights = extractAvailableResolutions(info);
+        const maxHeight = detectedHeights.length > 0 ? Math.max(...detectedHeights) : (info.height || 720);
 
         // Determine available video options based on stream availability
         const availableFormats: VideoFormatOption[] = [];
@@ -228,14 +300,14 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
         const targetHeights = [
           { height: 2160, label: '4K Ultra HD (2160p)', quality: '2160p' },
           { height: 1440, label: '2K Quad HD (1440p)', quality: '1440p' },
-          { height: 1080, label: '1080p Full HD', quality: '1080p', isBest: true },
+          { height: 1080, label: '1080p Full HD', quality: '1080p' },
           { height: 720, label: '720p HD', quality: '720p' },
           { height: 480, label: '480p Standart', quality: '480p' },
           { height: 360, label: '360p Hızlı', quality: '360p' },
         ];
 
         targetHeights.forEach((t) => {
-          const hasQuality = Array.from(videoHeights).some((h) => h >= t.height) || t.height <= 720;
+          const hasQuality = detectedHeights.some((h) => h >= t.height) || (maxHeight >= t.height);
           if (hasQuality) {
             let approxBytes: number | undefined;
             if (duration > 0) {
@@ -250,10 +322,18 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
               type: 'video',
               resolution: `${t.height}p`,
               filesizeApprox: approxBytes ? `~${formatBytes(approxBytes)}` : undefined,
-              isBest: t.isBest,
+              isBest: false,
             });
           }
         });
+
+        // Mark highest recommended format as isBest (prefer 1080p if present, otherwise 720p)
+        const bestVideoFormat = availableFormats.find((f) => f.quality === '1080p') ||
+          availableFormats.find((f) => f.quality === '720p') ||
+          availableFormats[0];
+        if (bestVideoFormat) {
+          bestVideoFormat.isBest = true;
+        }
 
         // Audio options (MP3 & M4A)
         const audioOptions: VideoFormatOption[] = [

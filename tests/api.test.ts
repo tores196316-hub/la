@@ -6,6 +6,7 @@
 import { isValidYouTubeUrl, extractYouTubeVideoId, getCanonicalYouTubeUrl, sanitizeFileName, isValidJobId, isSafePath } from '../server/utils/security.js';
 import { jobManager } from '../server/services/jobManager.js';
 import { getSystemDiagnostic } from '../server/services/systemChecker.js';
+import { extractAvailableResolutions } from '../server/services/ytdlp.js';
 import path from 'path';
 
 async function runTests() {
@@ -76,6 +77,52 @@ async function runTests() {
 
   const cleanup = jobManager.cleanExpiredFiles();
   assert(typeof cleanup.freedBytes === 'number', 'Otomatik disk temizleyici çalıştı');
+
+  // 6. DASH Stream & 1080p Format Resolution Extraction Tests
+  console.log('\n[6] DASH Stream & 1080p Çözünürlük Çıkarma Testleri');
+  
+  // Test with video-only DASH formats (e.g. YouTube format 137 / 248 / 399)
+  const mockDashInfo = {
+    title: 'Sample 1080p Video',
+    height: 1080,
+    width: 1920,
+    formats: [
+      { format_id: '137', vcodec: 'avc1.640028', height: 1080, width: 1920, format_note: '1080p' },
+      { format_id: '248', vcodec: 'vp9', height: 1080, width: 1920, format_note: '1080p' },
+      { format_id: '136', vcodec: 'avc1.4d401f', height: 720, width: 1280, format_note: '720p' },
+      { format_id: '140', vcodec: 'none', acodec: 'mp4a.40.2', format_note: 'audio only' },
+    ],
+  };
+  const dashRes = extractAvailableResolutions(mockDashInfo);
+  assert(dashRes.includes(1080), '1080p DASH formatı başarıyla algılandı');
+  assert(dashRes.includes(720), '720p stream algılandı');
+
+  // Test with vertical YouTube Shorts (1080x1920)
+  const mockShortsInfo = {
+    title: 'Sample 1080p Shorts',
+    height: 1920,
+    width: 1080,
+    formats: [
+      { format_id: '399', vcodec: 'av01', height: 1920, width: 1080, format_note: '1080p' },
+      { format_id: '140', vcodec: 'none', acodec: 'mp4a.40.2' },
+    ],
+  };
+  const shortsRes = extractAvailableResolutions(mockShortsInfo);
+  assert(shortsRes.includes(1080), 'Dikey Shorts için 1080p başarıyla algılandı');
+
+  // Test with only 720p maximum video
+  const mock720pOnlyInfo = {
+    title: 'Sample 720p Only Video',
+    height: 720,
+    width: 1280,
+    formats: [
+      { format_id: '22', vcodec: 'avc1.64001F', acodec: 'mp4a.40.2', height: 720, width: 1280 },
+      { format_id: '18', vcodec: 'avc1.42001E', acodec: 'mp4a.40.2', height: 360, width: 640 },
+    ],
+  };
+  const res720Only = extractAvailableResolutions(mock720pOnlyInfo);
+  assert(res720Only.includes(720), '720p video için 720p korundu');
+  assert(!res720Only.includes(1080), '720p videoda sahte 1080p eklenmedi');
 
   console.log(`\n========================================`);
   console.log(`📊 Test Sonuçları: ${passed} Başarılı, ${failed} Başarısız`);

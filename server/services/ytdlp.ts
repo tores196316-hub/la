@@ -279,7 +279,7 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
       args.push('--audio-format', 'm4a');
     }
   } else {
-    // Video format
+    // Video format matching exact target resolution without downscaling
     let maxH = 1080;
     if (quality === '2160p') maxH = 2160;
     else if (quality === '1440p') maxH = 1440;
@@ -288,11 +288,14 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
     else if (quality === '480p') maxH = 480;
     else if (quality === '360p') maxH = 360;
 
+    // First try exact height match, then fallback to best available under or equal to height
     args.push(
       '-f',
-      `bestvideo[height<=${maxH}]+bestaudio/best[height<=${maxH}]/bestvideo+bestaudio/best`
+      `bestvideo[height=${maxH}]+bestaudio/bestvideo[height<=${maxH}]+bestaudio/best[height<=${maxH}]/bestvideo+bestaudio/best`
     );
     args.push('--merge-output-format', 'mp4');
+    // Ensure FFmpeg copies video and encodes audio to standard AAC or copies streams
+    args.push('--remux-video', 'mp4');
   }
 
   args.push('--', url);

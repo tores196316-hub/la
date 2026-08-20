@@ -74,17 +74,39 @@ export function getResolvedCookiePath(): string | null {
 }
 
 /**
+ * Detects Node executable path for explicit --js-runtimes configuration.
+ */
+export function getNodeExecutablePath(): string {
+  if (process.execPath && fs.existsSync(process.execPath)) {
+    return process.execPath;
+  }
+  if (fs.existsSync('/usr/local/bin/node')) {
+    return '/usr/local/bin/node';
+  }
+  if (fs.existsSync('/usr/bin/node')) {
+    return '/usr/bin/node';
+  }
+  return 'node';
+}
+
+/**
  * Builds base yt-dlp arguments including JavaScript runtime, anti-blocking, proxy & cookies.
  */
 export function buildBaseYtDlpArgs(): string[] {
+  const nodePath = getNodeExecutablePath();
+
   const args: string[] = [
     '--no-warnings',
     '--no-playlist',
     '--no-check-certificates',
     '--force-ipv4',
     '--geo-bypass',
+    // Explicit JavaScript Runtime configuration for yt-dlp & yt-dlp-ejs
+    '--js-runtimes',
+    `node:${nodePath}`,
+    // YouTube player client priority
     '--extractor-args',
-    'youtube:player_client=android,web;js_engine=node',
+    'youtube:player_client=android,web',
   ];
 
   // Configure optional proxy if provided via env

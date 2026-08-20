@@ -16,8 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp with [default] dependencies and yt-dlp-ejs (Node.js JS runtime engine provider)
+# Install yt-dlp with [default] dependencies and yt-dlp-ejs plugin/package
 RUN pip3 install --no-cache-dir --break-system-packages "yt-dlp[default]" yt-dlp-ejs
+
+# Ensure Node binary is explicitly discoverable and symlinked
+RUN ln -sf /usr/local/bin/node /usr/bin/node || true
 
 # Ensure binaries and Node.js are readily discoverable in PATH
 ENV PATH="/usr/local/bin:/usr/bin:/bin:$PATH"

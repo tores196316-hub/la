@@ -49,7 +49,10 @@ export async function extractMetadata(url: string): Promise<VideoMetadata> {
     '--no-warnings',
     '--no-playlist',
     '--no-check-certificates',
-    '--prefer-free-formats',
+    '--user-agent',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    '--extractor-args',
+    'youtube:player_client=android,web',
     '--',
     url,
   ];
@@ -260,6 +263,10 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
     '--no-warnings',
     '--no-check-certificates',
     '--newline', // Output progress line by line
+    '--user-agent',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    '--extractor-args',
+    'youtube:player_client=android,web',
     '--output', outputTemplate,
   ];
 

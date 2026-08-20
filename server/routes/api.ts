@@ -64,12 +64,11 @@ apiRouter.post('/analyze', async (req: Request, res: Response): Promise<void> =>
       data: metadata,
     });
   } catch (err: any) {
+    console.error('Video analiz hatası:', err);
     const message = err.message || 'Video bilgileri alınırken bir hata oluştu.';
     res.status(422).json({
       success: false,
-      error: message.includes('Geçerli') || message.includes('kullanılamıyor') || message.includes('işlenemiyor')
-        ? message
-        : 'Bu içerik şu anda işlenemiyor.',
+      error: message || 'Bu içerik şu anda işlenemiyor.',
     });
   }
 });

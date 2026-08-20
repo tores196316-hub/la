@@ -12,12 +12,12 @@ interface UrlInputSectionProps {
 
 const SAMPLE_VIDEOS = [
   {
-    title: 'Örnek 1: Big Buck Bunny (4K/60fps)',
-    url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+    title: 'Örnek 1: Rick Astley (4K / 1080p)',
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   },
   {
-    title: 'Örnek 2: Tears of Steel (Sci-Fi)',
-    url: 'https://www.youtube.com/watch?v=R6MlUcmOul8',
+    title: 'Örnek 2: Blender Sintel (Açık Film)',
+    url: 'https://www.youtube.com/watch?v=eRsGyueVLvQ',
   },
 ];
 

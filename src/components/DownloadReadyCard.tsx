@@ -92,14 +92,15 @@ export const DownloadReadyCard: React.FC<DownloadReadyCardProps> = ({ jobData, o
 
       {/* Main Download Button */}
       <div className="space-y-3 pt-1">
-        <button
-          type="button"
-          onClick={handleDownloadClick}
-          className="w-full py-4 sm:py-4.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white text-base sm:text-lg font-extrabold shadow-xl shadow-emerald-950/60 transition-all flex items-center justify-center gap-3 cursor-pointer active:scale-98"
+        <a
+          href={downloadUrl}
+          download={jobData.fileName || `imgivo_${jobData.jobId}.${jobData.format}`}
+          onClick={() => setDownloadStarted(true)}
+          className="w-full py-4 sm:py-4.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white text-base sm:text-lg font-extrabold shadow-xl shadow-emerald-950/60 transition-all flex items-center justify-center gap-3 cursor-pointer active:scale-98 no-underline"
         >
           <Download className="h-6 w-6 stroke-[2.5]" />
           <span>↓ Dosyayı İndir</span>
-        </button>
+        </a>
 
         {downloadStarted && (
           <p className="text-xs sm:text-sm text-emerald-400 font-medium flex items-center justify-center gap-1.5 animate-in fade-in duration-200">

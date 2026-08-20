@@ -35,7 +35,7 @@ export const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
     }
   };
 
-  const selectedFormat = metadata.availableFormats.find((f) => f.id === selectedFormatId) || formatsForType[0];
+  const selectedFormat = formatsForType.find((f) => f.id === selectedFormatId) || formatsForType[0] || metadata.availableFormats[0];
 
   const handleConvertClick = () => {
     if (selectedFormat && !isSubmitting) {

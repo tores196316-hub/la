@@ -297,6 +297,23 @@ export function saveRuntimeCookieContent(rawContent: string): { success: boolean
       content = jsonConverted;
     }
 
+    // Auto-map Google auth cookies (SID, SSID, SAPISID, etc.) to .youtube.com domain
+    const lines = content.split('\n');
+    const youtubeLines: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith('.google.com') || line.startsWith('accounts.google.com') || line.startsWith('www.google.com')) {
+        const parts = line.split('\t');
+        if (parts.length >= 7) {
+          const name = parts[5];
+          const val = parts[6];
+          youtubeLines.push(`.youtube.com\tTRUE\t/\tTRUE\t${parts[4] || '1820827520'}\t${name}\t${val}`);
+        }
+      }
+    }
+    if (youtubeLines.length > 0) {
+      content = content + '\n\n# YouTube Auth Mappings\n' + youtubeLines.join('\n') + '\n';
+    }
+
     const candidateDirs = ['/app/tmp', path.resolve(process.cwd(), 'tmp'), '/tmp'];
     let savedFile = '';
 

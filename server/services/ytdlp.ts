@@ -36,13 +36,54 @@ export function formatBytes(bytes?: number): string {
 }
 
 /**
+ * Helper to convert JSON cookie format (from Chrome extensions) to Netscape format required by yt-dlp.
+ */
+function tryConvertJsonToNetscapeCookies(rawText: string): string | null {
+  const trimmed = rawText.trim();
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+    const lines: string[] = [
+      '# Netscape HTTP Cookie File',
+      '# Generated automatically by IMGIVO Cookie Parser',
+    ];
+
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue;
+      const domain = item.domain || item.host || '.youtube.com';
+      const flag = domain.startsWith('.') ? 'TRUE' : 'FALSE';
+      const path = item.path || '/';
+      const secure = item.secure ? 'TRUE' : 'FALSE';
+      const expiration = Math.floor(item.expirationDate || item.expires || 2147483647);
+      const name = item.name || item.key;
+      const value = item.value || '';
+
+      if (name) {
+        lines.push(`${domain}\t${flag}\t${path}\t${secure}\t${expiration}\t${name}\t${value}`);
+      }
+    }
+
+    if (lines.length > 2) {
+      return lines.join('\n') + '\n';
+    }
+  } catch {
+    // Not valid JSON
+  }
+  return null;
+}
+
+/**
  * Resolves optional cookie file path from environment variables or disk safely.
  * Prioritizes pre-existing valid cookie files on disk (/app/tmp/cookies.txt, etc.)
- * before decoding environment variables, ensuring manually configured working files are always used.
+ * and comprehensively checks all common env var names (Netscape, Base64, JSON).
  */
 export function getResolvedCookiePath(): string | null {
   // 1. Explicit path from env
-  const customPath = process.env.YTDLP_COOKIES_PATH;
+  const customPath = process.env.YTDLP_COOKIES_PATH || process.env.COOKIES_PATH;
   if (customPath && customPath.trim()) {
     const resolvedPath = path.isAbsolute(customPath)
       ? customPath
@@ -62,8 +103,10 @@ export function getResolvedCookiePath(): string | null {
     '/app/tmp/cookies.txt',
     path.resolve(process.cwd(), 'tmp', 'cookies.txt'),
     '/tmp/cookies.txt',
-    path.resolve(process.cwd(), 'cookies.txt'),
     '/app/cookies.txt',
+    path.resolve(process.cwd(), 'cookies.txt'),
+    '/tmp/cookie.txt',
+    '/app/tmp/cookie.txt',
   ];
 
   for (const cPath of candidatePaths) {
@@ -77,40 +120,88 @@ export function getResolvedCookiePath(): string | null {
     }
   }
 
-  // 3. If no file on disk, check if raw or base64 string is in env
+  // 3. If no file on disk, check if raw, base64 or JSON string is in env
   const envContent =
     process.env.YTDLP_COOKIES_BASE64 ||
     process.env.YTDLP_COOKIE_CONTENT ||
     process.env.YTDLP_COOKIES ||
-    process.env.YOUTUBE_COOKIES;
+    process.env.YOUTUBE_COOKIES ||
+    process.env.YOUTUBE_COOKIE ||
+    process.env.COOKIES_TXT ||
+    process.env.COOKIE_CONTENT ||
+    process.env.COOKIES_CONTENT ||
+    process.env.YTDLP_COOKIE ||
+    process.env.COOKIES ||
+    process.env.COOKIE ||
+    process.env.YT_COOKIES ||
+    process.env.YT_COOKIE;
 
   if (envContent && envContent.trim()) {
     try {
-      let decoded = '';
-      if (process.env.YTDLP_COOKIES_BASE64 && process.env.YTDLP_COOKIES_BASE64.trim()) {
-        decoded = Buffer.from(process.env.YTDLP_COOKIES_BASE64.trim(), 'base64').toString('utf-8');
-      } else {
-        decoded = envContent;
+      let decoded = envContent.trim();
+
+      // Handle wrapping quotes
+      if (
+        (decoded.startsWith('"') && decoded.endsWith('"')) ||
+        (decoded.startsWith("'") && decoded.endsWith("'"))
+      ) {
+        decoded = decoded.slice(1, -1);
+      }
+
+      // Check if it's base64 encoded
+      if (
+        process.env.YTDLP_COOKIES_BASE64 ||
+        (/^[A-Za-z0-9+/=]+$/.test(decoded) &&
+          decoded.length > 50 &&
+          !decoded.includes('\t') &&
+          !decoded.includes('youtube.com') &&
+          !decoded.includes('#'))
+      ) {
+        try {
+          const tryBase64 = Buffer.from(decoded, 'base64').toString('utf-8');
+          if (tryBase64.includes('youtube.com') || tryBase64.includes('\t') || tryBase64.includes('#')) {
+            decoded = tryBase64;
+          }
+        } catch {
+          // keep original
+        }
       }
 
       // If user pasted multi-line cookies into a single-line environment variable UI (literal \n or \r\n)
       if (decoded.includes('\\n')) {
-        decoded = decoded.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\n');
+        decoded = decoded.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\n').replace(/\\t/g, '\t');
       }
 
       decoded = decoded.trim();
 
+      // Check if user pasted JSON array of cookies (e.g. from Cookie-Editor browser extension)
+      const jsonConverted = tryConvertJsonToNetscapeCookies(decoded);
+      if (jsonConverted) {
+        decoded = jsonConverted;
+      }
+
       if (decoded.length > 10) {
         // Choose best writable target path
-        const targetDir = fs.existsSync('/app/tmp')
-          ? '/app/tmp'
-          : path.resolve(process.cwd(), 'tmp');
-        if (!fs.existsSync(targetDir)) {
-          fs.mkdirSync(targetDir, { recursive: true });
+        const candidateDirs = ['/app/tmp', path.resolve(process.cwd(), 'tmp'), '/tmp'];
+        let targetFile = '';
+
+        for (const dir of candidateDirs) {
+          try {
+            if (!fs.existsSync(dir)) {
+              fs.mkdirSync(dir, { recursive: true });
+            }
+            const candidateFile = path.join(dir, 'cookies.txt');
+            fs.writeFileSync(candidateFile, decoded, { encoding: 'utf-8', mode: 0o600 });
+            targetFile = candidateFile;
+            break;
+          } catch {
+            // try next candidate
+          }
         }
-        const targetFile = path.join(targetDir, 'cookies.txt');
-        fs.writeFileSync(targetFile, decoded, { encoding: 'utf-8', mode: 0o600 });
-        return targetFile;
+
+        if (targetFile) {
+          return targetFile;
+        }
       }
     } catch (e: any) {
       console.warn('Cookie içeriği dosyaya yazılamadı:', e?.message || 'Bilinmeyen hata');

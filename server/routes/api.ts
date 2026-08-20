@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
 import { isValidYouTubeUrl, getCanonicalYouTubeUrl, isValidJobId, isSafePath } from '../utils/security.js';
-import { extractMetadata } from '../services/ytdlp.js';
+import { extractMetadata, getResolvedCookiePath, saveRuntimeCookieContent } from '../services/ytdlp.js';
 import { getFastYouTubeMetadata } from '../services/fastMeta.js';
 import { jobManager } from '../services/jobManager.js';
 import { getSystemDiagnostic } from '../services/systemChecker.js';
@@ -316,6 +316,57 @@ apiRouter.post('/admin/cleanup', (_req: Request, res: Response): void => {
     message: `${result.removedCount} geçici dosya temizlendi.`,
     freedMb: (result.freedBytes / (1024 * 1024)).toFixed(2),
   });
+});
+
+/**
+ * GET /api/admin/cookies
+ * Checks if a valid cookie file is configured
+ */
+apiRouter.get('/admin/cookies', (_req: Request, res: Response): void => {
+  const cookiePath = getResolvedCookiePath();
+  let fileSize = 0;
+  if (cookiePath && fs.existsSync(cookiePath)) {
+    try {
+      fileSize = fs.statSync(cookiePath).size;
+    } catch {
+      // ignore
+    }
+  }
+
+  res.json({
+    success: true,
+    hasCookies: Boolean(cookiePath),
+    cookiePath: cookiePath ? path.basename(cookiePath) : null,
+    fileSize,
+  });
+});
+
+/**
+ * POST /api/admin/cookies
+ * Saves user-provided cookies (Netscape or JSON format) to disk
+ */
+apiRouter.post('/admin/cookies', (req: Request, res: Response): void => {
+  const { cookies } = req.body;
+  if (!cookies || typeof cookies !== 'string' || !cookies.trim()) {
+    res.status(400).json({
+      success: false,
+      error: 'Lütfen geçerli bir YouTube cookie içeriği (Netscape veya JSON formatında) yapıştırın.',
+    });
+    return;
+  }
+
+  const result = saveRuntimeCookieContent(cookies);
+  if (result.success) {
+    res.json({
+      success: true,
+      message: result.message,
+    });
+  } else {
+    res.status(500).json({
+      success: false,
+      error: result.message,
+    });
+  }
 });
 
 /**

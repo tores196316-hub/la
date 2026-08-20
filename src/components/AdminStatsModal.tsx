@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AdminStats } from '../types';
-import { BarChart3, CheckCircle2, XCircle, Activity, Server, HardDrive, RefreshCw, Trash2, Clock } from 'lucide-react';
+import { BarChart3, CheckCircle2, XCircle, Activity, Server, HardDrive, RefreshCw, Trash2, Clock, Key, ShieldCheck, HelpCircle } from 'lucide-react';
 
 interface AdminStatsModalProps {
   onClose: () => void;
@@ -12,6 +12,13 @@ export const AdminStatsModal: React.FC<AdminStatsModalProps> = ({ onClose }) => 
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<string | null>(null);
 
+  // Cookie management state
+  const [cookieStatus, setCookieStatus] = useState<{ hasCookies: boolean; fileSize: number } | null>(null);
+  const [cookieInput, setCookieInput] = useState('');
+  const [cookieSaving, setCookieSaving] = useState(false);
+  const [cookieMsg, setCookieMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showCookieBox, setShowCookieBox] = useState(false);
+
   const fetchStats = async () => {
     try {
       setLoading(true);
@@ -19,6 +26,16 @@ export const AdminStatsModal: React.FC<AdminStatsModalProps> = ({ onClose }) => 
       const data = await res.json();
       if (data.success) {
         setStats(data.data);
+      }
+
+      // Also check cookies
+      const cookieRes = await fetch('/api/admin/cookies');
+      const cookieData = await cookieRes.json();
+      if (cookieData.success) {
+        setCookieStatus({
+          hasCookies: cookieData.hasCookies,
+          fileSize: cookieData.fileSize || 0,
+        });
       }
     } catch {
       // Error handling
@@ -48,6 +65,33 @@ export const AdminStatsModal: React.FC<AdminStatsModalProps> = ({ onClose }) => 
     }
   };
 
+  const handleSaveCookies = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cookieInput.trim()) return;
+
+    try {
+      setCookieSaving(true);
+      setCookieMsg(null);
+      const res = await fetch('/api/admin/cookies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookies: cookieInput }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCookieMsg({ type: 'success', text: data.message || 'Cookie başarıyla kaydedildi.' });
+        setCookieInput('');
+        fetchStats();
+      } else {
+        setCookieMsg({ type: 'error', text: data.error || 'Cookie kaydedilemedi.' });
+      }
+    } catch (err: any) {
+      setCookieMsg({ type: 'error', text: 'Bağlantı hatası oluştu.' });
+    } finally {
+      setCookieSaving(false);
+    }
+  };
+
   const formatUptime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -64,7 +108,7 @@ export const AdminStatsModal: React.FC<AdminStatsModalProps> = ({ onClose }) => 
           </div>
           <div>
             <h2 className="text-sm sm:text-base font-bold text-white">Sistem & İstatistik Paneli</h2>
-            <p className="text-xs text-slate-400">Sunucu durumu, medya metrikleri ve disk yönetimi</p>
+            <p className="text-xs text-slate-400">Sunucu durumu, YouTube kimlik doğrulaması ve disk yönetimi</p>
           </div>
         </div>
 
@@ -136,6 +180,19 @@ export const AdminStatsModal: React.FC<AdminStatsModalProps> = ({ onClose }) => 
                 </div>
 
                 <div className="flex justify-between items-center py-1 border-b border-white/[0.04]">
+                  <span className="text-slate-400">YouTube Cookie:</span>
+                  {cookieStatus?.hasCookies ? (
+                    <span className="font-medium text-emerald-400 flex items-center gap-1 font-mono text-[11px]">
+                      <ShieldCheck className="h-3 w-3" /> Aktif ({Math.round(cookieStatus.fileSize / 1024)} KB)
+                    </span>
+                  ) : (
+                    <span className="font-medium text-amber-400 font-mono text-[11px]">
+                      Tanımlı Değil (Multi-Client Aktif)
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex justify-between items-center py-1 border-b border-white/[0.04]">
                   <span className="text-slate-400">Geçici Disk:</span>
                   <span className="font-mono text-slate-200">
                     {stats.system.tempStorageUsedMb} MB
@@ -199,6 +256,59 @@ export const AdminStatsModal: React.FC<AdminStatsModalProps> = ({ onClose }) => 
               )}
             </div>
           </div>
+
+          {/* Cookie & Bot Verification Resolver Card */}
+          <div className="p-4 rounded-lg bg-[#111319] border border-white/[0.06] space-y-3 text-left">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Key className="h-4 w-4 text-slate-300" />
+                <div>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                    YouTube Bot Doğrulaması & Cookie Tanımlama
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    YouTube zaman zaman bulut sunucularına bot doğrulaması koyabilir. Cookie ekleyerek doğrulamayı anında aşabilirsiniz.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCookieBox(!showCookieBox)}
+                className="px-2.5 py-1 rounded bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium transition-colors cursor-pointer shrink-0"
+              >
+                {showCookieBox ? 'Kapat' : 'Cookie Ekle / Düzenle'}
+              </button>
+            </div>
+
+            {showCookieBox && (
+              <form onSubmit={handleSaveCookies} className="space-y-2.5 pt-2 border-t border-white/[0.04]">
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Tarayıcınızdan (Cookie-Editor uzantısı vb.) YouTube için kopyaladığınız Netscape (txt) veya JSON formatındaki cookie metnini buraya yapıştırıp kaydedin:
+                </p>
+                <textarea
+                  value={cookieInput}
+                  onChange={(e) => setCookieInput(e.target.value)}
+                  placeholder="# Netscape HTTP Cookie File&#10;.youtube.com TRUE / TRUE 2147483647 SID ..."
+                  rows={4}
+                  className="w-full rounded-md bg-[#08090c] border border-white/[0.08] p-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-white/30"
+                />
+                <div className="flex items-center justify-between">
+                  {cookieMsg && (
+                    <span className={`text-xs ${cookieMsg.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {cookieMsg.text}
+                    </span>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={cookieSaving || !cookieInput.trim()}
+                    className="ml-auto px-4 py-1.5 rounded-md bg-white text-black font-semibold text-xs hover:bg-slate-200 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    {cookieSaving ? 'Kaydediliyor...' : 'Cookieyi Sisteme Tanımla'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       ) : (
         <div className="py-12 text-center text-slate-400 text-xs">
@@ -208,5 +318,6 @@ export const AdminStatsModal: React.FC<AdminStatsModalProps> = ({ onClose }) => 
     </div>
   );
 };
+
 
 

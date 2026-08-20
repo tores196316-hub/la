@@ -229,8 +229,8 @@ export function getNodeExecutablePath(): string {
 }
 
 /**
- * Builds base yt-dlp arguments including JavaScript runtime, proxy & cookies.
- * Matches manual Railway-tested command without bot-triggering headers.
+ * Builds base yt-dlp arguments including multi-client fallbacks, JavaScript runtime, proxy & cookies.
+ * Uses ios, android, web_safari, mweb clients and standard desktop user agent to avoid bot checks.
  */
 export function buildBaseYtDlpArgs(): string[] {
   const nodePath = getNodeExecutablePath();
@@ -239,6 +239,11 @@ export function buildBaseYtDlpArgs(): string[] {
     '--no-warnings',
     '--no-playlist',
     '--no-check-certificates',
+    // Multi-client extractor arguments to bypass bot verification across YouTube players
+    '--extractor-args',
+    'youtube:player_client=ios,android,web_safari,mweb,web',
+    '--user-agent',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     // Explicit JavaScript Runtime configuration for yt-dlp & yt-dlp-ejs
     '--js-runtimes',
     `node:${nodePath}`,
@@ -264,6 +269,58 @@ export function buildBaseYtDlpArgs(): string[] {
   }
 
   return args;
+}
+
+/**
+ * Saves cookie content directly from the admin UI to the disk for runtime use.
+ */
+export function saveRuntimeCookieContent(rawContent: string): { success: boolean; message: string; cookiePath?: string } {
+  try {
+    let content = rawContent.trim();
+    if (!content) {
+      return { success: false, message: 'Cookie içeriği boş olamaz.' };
+    }
+
+    if (
+      (content.startsWith('"') && content.endsWith('"')) ||
+      (content.startsWith("'") && content.endsWith("'"))
+    ) {
+      content = content.slice(1, -1);
+    }
+
+    if (content.includes('\\n')) {
+      content = content.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\n').replace(/\\t/g, '\t');
+    }
+
+    const jsonConverted = tryConvertJsonToNetscapeCookies(content);
+    if (jsonConverted) {
+      content = jsonConverted;
+    }
+
+    const candidateDirs = ['/app/tmp', path.resolve(process.cwd(), 'tmp'), '/tmp'];
+    let savedFile = '';
+
+    for (const dir of candidateDirs) {
+      try {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        const filePath = path.join(dir, 'cookies.txt');
+        fs.writeFileSync(filePath, content, { encoding: 'utf-8', mode: 0o600 });
+        savedFile = filePath;
+        break;
+      } catch {
+        // try next candidate
+      }
+    }
+
+    if (savedFile) {
+      return { success: true, message: 'YouTube cookie dosyası başarıyla kaydedildi.', cookiePath: savedFile };
+    }
+    return { success: false, message: 'Dosya sistemine yazılamadı.' };
+  } catch (err: any) {
+    return { success: false, message: `Cookie kaydedilemedi: ${err?.message || 'Bilinmeyen hata'}` };
+  }
 }
 
 /**

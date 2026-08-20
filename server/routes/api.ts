@@ -401,36 +401,6 @@ apiRouter.post('/admin/cookies', (req: Request, res: Response): void => {
 });
 
 /**
- * GET /api/admin/free-speed
- * Returns current free speed and queue configurations
- */
-apiRouter.get('/admin/free-speed', (_req: Request, res: Response): void => {
-  const config = jobManager.getFreeSpeedConfig();
-  res.json({
-    success: true,
-    data: config,
-  });
-});
-
-/**
- * POST /api/admin/free-speed
- * Updates free speed and queue configurations
- */
-apiRouter.post('/admin/free-speed', (req: Request, res: Response): void => {
-  const { queueDelaySeconds, downloadLimitRate } = req.body;
-  const updated = jobManager.updateFreeSpeedConfig({
-    queueDelaySeconds: typeof queueDelaySeconds === 'number' ? queueDelaySeconds : undefined,
-    downloadLimitRate: typeof downloadLimitRate === 'string' ? downloadLimitRate : undefined,
-  });
-
-  res.json({
-    success: true,
-    message: 'Ücretsiz kullanıcı hız ve kuyruk ayarları başarıyla güncellendi.',
-    data: updated,
-  });
-});
-
-/**
  * GET /api/history
  * Returns recent processed jobs
  */

@@ -104,9 +104,9 @@ export function buildBaseYtDlpArgs(): string[] {
     // Explicit JavaScript Runtime configuration for yt-dlp & yt-dlp-ejs
     '--js-runtimes',
     `node:${nodePath}`,
-    // YouTube player client priority
+    // YouTube player client priority: web client is essential for 1080p/1440p/4K DASH stream extraction
     '--extractor-args',
-    'youtube:player_client=android,web',
+    'youtube:player_client=web,android,ios',
   ];
 
   // Configure optional proxy if provided via env
@@ -400,10 +400,22 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
     else if (quality === '480p') maxDim = 480;
     else if (quality === '360p') maxDim = 360;
 
-    args.push(
-      '-f',
-      `bv*[height<=?${maxDim}]+ba/bv*[width<=?${maxDim}]+ba/b[height<=?${maxDim}]/b[width<=?${maxDim}]/bv*+ba/b`
-    );
+    // Video format selector for MP4 output:
+    // 1080p (and other resolutions) uses separate DASH video (bv*) + audio (ba) streams merged via FFmpeg
+    // Supports horizontal (16:9) and vertical (9:16 Shorts) videos with graceful fallback down to 720p and best available
+    const formatSpec = [
+      `bv*[ext=mp4][height<=?${maxDim}]+ba[ext=m4a]`,
+      `bv*[height<=?${maxDim}]+ba`,
+      `bv*[width<=?${maxDim}]+ba`,
+      `b[height<=?${maxDim}]`,
+      `b[width<=?${maxDim}]`,
+      `bv*[height<=?720]+ba`,
+      `b[height<=?720]`,
+      `bv*+ba`,
+      `b`,
+    ].join('/');
+
+    args.push('-f', formatSpec);
     args.push('--merge-output-format', 'mp4');
   }
 

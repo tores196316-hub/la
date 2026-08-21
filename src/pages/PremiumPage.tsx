@@ -27,10 +27,21 @@ export function PremiumPage() {
   const [isActivating, setIsActivating] = useState(false);
   const [demoSuccess, setDemoSuccess] = useState(false);
 
-  // Dynamic Live Pricing from Firestore
+  // Dynamic Live Pricing from Firestore & Backend API
   const [pricing, setPricing] = useState<PricingSettings>(DEFAULT_PRICING);
 
   useEffect(() => {
+    // Initial fetch from backend
+    fetch('/api/pricing-settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          setPricing(data.data);
+        }
+      })
+      .catch(() => {});
+
+    // Real-time Firestore sync
     const unsubscribe = subscribeToPricingSettings((livePricing) => {
       setPricing(livePricing);
     });

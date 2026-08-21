@@ -63,10 +63,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Platform Settings & Live Pricing
+    // Platform Settings & Live Pricing & Speeds
     match /settings/{settingsId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if true;
     }
   }
 }

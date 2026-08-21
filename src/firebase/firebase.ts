@@ -287,19 +287,19 @@ export async function adminSetUserPremiumInFirestore(
   const userRef = doc(db, 'users', targetUserId);
   const userSnap = await getDoc(userRef);
 
-  if (!userSnap.exists()) {
-    throw new Error('Kullanıcı bulunamadı.');
-  }
-
-  const currentData = userSnap.data();
+  const currentData = userSnap.exists() ? userSnap.data() : {};
 
   if (options.cancel) {
-    await updateDoc(userRef, {
-      plan: 'free',
-      premiumActive: false,
-      premiumExpiresAt: null,
-      updatedAt: Date.now(),
-    });
+    await setDoc(
+      userRef,
+      {
+        plan: 'free',
+        premiumActive: false,
+        premiumExpiresAt: null,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
     return;
   }
 
@@ -317,13 +317,17 @@ export async function adminSetUserPremiumInFirestore(
   const newExpiry = baseTime + addedMs;
   const plan = options.plan || 'premium';
 
-  await updateDoc(userRef, {
-    plan,
-    premiumActive: true,
-    premiumStartedAt: currentData.premiumStartedAt || now,
-    premiumExpiresAt: newExpiry,
-    updatedAt: now,
-  });
+  await setDoc(
+    userRef,
+    {
+      plan,
+      premiumActive: true,
+      premiumStartedAt: currentData.premiumStartedAt || now,
+      premiumExpiresAt: newExpiry,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
 }
 
 /**
@@ -334,10 +338,14 @@ export async function adminSetUserRoleInFirestore(
   role: UserRole
 ): Promise<void> {
   const userRef = doc(db, 'users', targetUserId);
-  await updateDoc(userRef, {
-    role,
-    updatedAt: Date.now(),
-  });
+  await setDoc(
+    userRef,
+    {
+      role,
+      updatedAt: Date.now(),
+    },
+    { merge: true }
+  );
 }
 
 /**

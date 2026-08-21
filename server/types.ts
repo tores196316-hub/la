@@ -114,3 +114,18 @@ export const DEFAULT_SPEED_SETTINGS: SpeedSettings = {
   premiumPlusSpeedLimitKbps: 0, // Sınırsız Turbo
   premiumPlusConcurrentFragments: 8, // 8 eşzamanlı parça
 };
+
+export interface PricingSettings {
+  premiumMonthly: number; // ₺69
+  premiumDiscountPercent: number; // 30%
+  premiumPlusMonthly: number; // ₺119
+  premiumPlusDiscountPercent: number; // 25%
+  updatedAt?: number;
+}
+
+export const DEFAULT_PRICING: PricingSettings = {
+  premiumMonthly: 69,
+  premiumDiscountPercent: 30,
+  premiumPlusMonthly: 119,
+  premiumPlusDiscountPercent: 25,
+};

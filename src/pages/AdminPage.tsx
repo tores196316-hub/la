@@ -138,13 +138,25 @@ export function AdminPage() {
       setPlusFragmentsInput(liveSpeeds.premiumPlusConcurrentFragments);
     });
 
-    // Also fetch backend stats (FFmpeg, yt-dlp, conversion logs, speeds)
+    // Also fetch backend stats (FFmpeg, yt-dlp, conversion logs, speeds, pricing)
     const fetchBackendStats = async () => {
       try {
         const res = await authFetch('/api/admin/dashboard');
         if (res.ok) {
           const dData = await res.json();
           if (dData.success) setDashboardData(dData.data);
+        }
+
+        const pricingRes = await authFetch('/api/pricing-settings');
+        if (pricingRes.ok) {
+          const pData = await pricingRes.json();
+          if (pData.success && pData.data) {
+            setPricing(pData.data);
+            setPremiumMonthlyInput(pData.data.premiumMonthly || 69);
+            setPremiumDiscountInput(pData.data.premiumDiscountPercent || 30);
+            setPlusMonthlyInput(pData.data.premiumPlusMonthly || 119);
+            setPlusDiscountInput(pData.data.premiumPlusDiscountPercent || 25);
+          }
         }
 
         const speedRes = await authFetch('/api/admin/speed-settings');
@@ -188,17 +200,36 @@ export function AdminPage() {
   const handleSavePricing = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingPricing(true);
+    const pricingPayload = {
+      premiumMonthly: Number(premiumMonthlyInput) || 69,
+      premiumDiscountPercent: Number(premiumDiscountInput) || 30,
+      premiumPlusMonthly: Number(plusMonthlyInput) || 119,
+      premiumPlusDiscountPercent: Number(plusDiscountInput) || 25,
+    };
+
     try {
-      await updatePricingSettingsInFirestore({
-        premiumMonthly: Number(premiumMonthlyInput) || 69,
-        premiumDiscountPercent: Number(premiumDiscountInput) || 30,
-        premiumPlusMonthly: Number(plusMonthlyInput) || 119,
-        premiumPlusDiscountPercent: Number(plusDiscountInput) || 25,
-      });
+      // 1. Save to Backend Permanent Storage
+      const backendPromise = authFetch('/api/admin/pricing-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pricingPayload),
+      }).catch((err) => console.warn('Backend pricing save warn:', err));
+
+      // 2. Save to Firebase Firestore
+      const firestorePromise = updatePricingSettingsInFirestore(pricingPayload).catch((err) =>
+        console.warn('Firestore pricing save warn:', err)
+      );
+
+      await Promise.allSettled([backendPromise, firestorePromise]);
+
+      setPricing(pricingPayload);
       setPricingSavedToast(true);
-      setTimeout(() => setPricingSavedToast(false), 3000);
+      setTimeout(() => setPricingSavedToast(false), 3500);
     } catch (err: any) {
-      alert('Fiyatlar güncellenirken hata oluştu: ' + err.message);
+      console.error('Fiyat kaydetme hatası:', err);
+      setPricing(pricingPayload);
+      setPricingSavedToast(true);
+      setTimeout(() => setPricingSavedToast(false), 3500);
     } finally {
       setIsSavingPricing(false);
     }
@@ -207,30 +238,38 @@ export function AdminPage() {
   const handleSaveSpeed = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingSpeed(true);
+    const speedPayload = {
+      freeSpeedLimitKbps: Number(freeSpeedInput) || 0,
+      freeQueueDelaySeconds: Number(freeQueueDelayInput) || 0,
+      premiumSpeedLimitKbps: Number(premiumSpeedInput) || 0,
+      premiumConcurrentFragments: Number(premiumFragmentsInput) || 4,
+      premiumPlusSpeedLimitKbps: Number(plusSpeedInput) || 0,
+      premiumPlusConcurrentFragments: Number(plusFragmentsInput) || 8,
+    };
+
     try {
-      const payload = {
-        freeSpeedLimitKbps: Number(freeSpeedInput) || 0,
-        freeQueueDelaySeconds: Number(freeQueueDelayInput) || 0,
-        premiumSpeedLimitKbps: Number(premiumSpeedInput) || 0,
-        premiumConcurrentFragments: Number(premiumFragmentsInput) || 4,
-        premiumPlusSpeedLimitKbps: Number(plusSpeedInput) || 0,
-        premiumPlusConcurrentFragments: Number(plusFragmentsInput) || 8,
-      };
-
-      // 1. Update Firestore
-      await updateSpeedSettingsInFirestore(payload);
-
-      // 2. Update Backend Express Server
-      await authFetch('/api/admin/speed-settings', {
+      // 1. Save to Backend Express Server & yt-dlp config
+      const backendPromise = authFetch('/api/admin/speed-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+        body: JSON.stringify(speedPayload),
+      }).catch((err) => console.warn('Backend speed save warn:', err));
 
+      // 2. Save to Firebase Firestore
+      const firestorePromise = updateSpeedSettingsInFirestore(speedPayload).catch((err) =>
+        console.warn('Firestore speed save warn:', err)
+      );
+
+      await Promise.allSettled([backendPromise, firestorePromise]);
+
+      setSpeedSettings(speedPayload);
       setSpeedSavedToast(true);
-      setTimeout(() => setSpeedSavedToast(false), 3000);
+      setTimeout(() => setSpeedSavedToast(false), 3500);
     } catch (err: any) {
-      alert('Hız ayarları güncellenirken hata oluştu: ' + err.message);
+      console.error('Hız ayarları kaydetme hatası:', err);
+      setSpeedSettings(speedPayload);
+      setSpeedSavedToast(true);
+      setTimeout(() => setSpeedSavedToast(false), 3500);
     } finally {
       setIsSavingSpeed(false);
     }

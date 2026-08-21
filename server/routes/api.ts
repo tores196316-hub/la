@@ -9,6 +9,7 @@ import { jobManager } from '../services/jobManager.js';
 import { getSystemDiagnostic } from '../services/systemChecker.js';
 import { userService } from '../services/userService.js';
 import { speedConfigService } from '../services/speedConfig.js';
+import { pricingConfigService } from '../services/pricingConfig.js';
 
 export const apiRouter = Router();
 
@@ -410,6 +411,44 @@ apiRouter.get('/admin/speed-settings', (_req: Request, res: Response): void => {
   res.json({
     success: true,
     data: settings,
+  });
+});
+
+/**
+ * GET /api/pricing-settings & /api/admin/pricing-settings
+ * Returns current pricing settings
+ */
+apiRouter.get(['/pricing-settings', '/admin/pricing-settings'], (_req: Request, res: Response): void => {
+  const settings = pricingConfigService.getSettings();
+  res.json({
+    success: true,
+    data: settings,
+  });
+});
+
+/**
+ * POST /api/admin/pricing-settings
+ * Updates package pricing settings
+ */
+apiRouter.post('/admin/pricing-settings', (req: Request, res: Response): void => {
+  const {
+    premiumMonthly,
+    premiumDiscountPercent,
+    premiumPlusMonthly,
+    premiumPlusDiscountPercent,
+  } = req.body;
+
+  const updated = pricingConfigService.updateSettings({
+    premiumMonthly: typeof premiumMonthly === 'number' ? Math.max(1, premiumMonthly) : undefined,
+    premiumDiscountPercent: typeof premiumDiscountPercent === 'number' ? Math.max(0, Math.min(90, premiumDiscountPercent)) : undefined,
+    premiumPlusMonthly: typeof premiumPlusMonthly === 'number' ? Math.max(1, premiumPlusMonthly) : undefined,
+    premiumPlusDiscountPercent: typeof premiumPlusDiscountPercent === 'number' ? Math.max(0, Math.min(90, premiumPlusDiscountPercent)) : undefined,
+  });
+
+  res.json({
+    success: true,
+    data: updated,
+    message: 'Fiyatlandırma ayarları başarıyla kaydedildi.',
   });
 });
 

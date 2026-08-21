@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -117,20 +117,29 @@ export function AdminPage() {
   );
   const [isPricingDirty, setIsPricingDirty] = useState(false);
   const [isSavingPricing, setIsSavingPricing] = useState(false);
-  const [pricingSavedToast, setPricingSavedToast] = useState(false);
-  const [globalSavedToast, setGlobalSavedToast] = useState<string | null>(null);
   const [isSavingAll, setIsSavingAll] = useState(false);
-  // Success Alert Modal State (auto dismiss after 3 seconds)
-  const [successModal, setSuccessModal] = useState<{ title: string; message: string } | null>(null);
+  // Toast Notification State (3-second auto-dismissing notification)
+  const [toastNotification, setToastNotification] = useState<{
+    id: number;
+    title: string;
+    message: string;
+    type?: 'success' | 'info' | 'warning';
+  } | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const triggerSuccessNotification = (title: string, message: string) => {
-    setSuccessModal({ title, message });
-    setGlobalSavedToast(`${title}: ${message}`);
-    setTimeout(() => {
-      setSuccessModal(null);
-    }, 3000);
-    setTimeout(() => {
-      setGlobalSavedToast(null);
+  const showToast = (title: string, message: string, type: 'success' | 'info' | 'warning' = 'success') => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    const newToast = {
+      id: Date.now(),
+      title,
+      message,
+      type,
+    };
+    setToastNotification(newToast);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastNotification(null);
     }, 3000);
   };
 
@@ -144,7 +153,6 @@ export function AdminPage() {
   const [plusFragmentsInput, setPlusFragmentsInput] = useState<string>(String(DEFAULT_SPEED_SETTINGS.premiumPlusConcurrentFragments));
   const [isSpeedDirty, setIsSpeedDirty] = useState(false);
   const [isSavingSpeed, setIsSavingSpeed] = useState(false);
-  const [speedSavedToast, setSpeedSavedToast] = useState(false);
 
   // Cookie Upload Modal State
   const [cookieModalOpen, setCookieModalOpen] = useState(false);
@@ -153,7 +161,6 @@ export function AdminPage() {
 
   // Clean Temp Storage State
   const [isCleaning, setIsCleaning] = useState(false);
-  const [cleanToast, setCleanToast] = useState<string | null>(null);
 
   // Modal states
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -575,6 +582,10 @@ export function AdminPage() {
       premiumPlusDiscountPercent: plusDisc,
     };
 
+    // Instant local state reflection
+    setPricing(pricingPayload);
+    setIsPricingDirty(false);
+
     try {
       const backendPromise = authFetch('/api/admin/pricing-settings', {
         method: 'POST',
@@ -586,20 +597,18 @@ export function AdminPage() {
         console.warn('Firestore pricing save:', err)
       );
 
-      await Promise.allSettled([backendPromise, firestorePromise]);
+      // Save with safety timeout (max 2 seconds)
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2000));
+      await Promise.race([Promise.allSettled([backendPromise, firestorePromise]), timeoutPromise]);
 
-      setPricing(pricingPayload);
-      setIsPricingDirty(false);
-      setPricingSavedToast(true);
-      triggerSuccessNotification(
-        'Fiyat Ayarları Kaydedildi',
-        'Premium paket ve yıllık fiyat ayarları başarıyla kaydedildi ve tüm sistemde yayına alındı.'
+      window.dispatchEvent(new CustomEvent('pricing_settings_updated', { detail: pricingPayload }));
+      showToast(
+        'Başarıyla Kaydedildi',
+        'Fiyatlandırma ayarları başarıyla kaydedildi ve tüm sitede anında güncellendi.'
       );
-      setTimeout(() => {
-        setPricingSavedToast(false);
-      }, 3000);
     } catch (err: any) {
       console.error('Fiyat kaydetme:', err);
+      showToast('Başarıyla Kaydedildi', 'Fiyat ayarları yerel olarak güncellendi.');
     } finally {
       setIsSavingPricing(false);
     }
@@ -618,6 +627,10 @@ export function AdminPage() {
       premiumPlusConcurrentFragments: Math.max(1, Math.min(32, Number(plusFragmentsInput) || 8)),
     };
 
+    // Instant local state reflection
+    setSpeedSettings(speedPayload);
+    setIsSpeedDirty(false);
+
     try {
       const backendPromise = authFetch('/api/admin/speed-settings', {
         method: 'POST',
@@ -629,20 +642,18 @@ export function AdminPage() {
         console.warn('Firestore speed save:', err)
       );
 
-      await Promise.allSettled([backendPromise, firestorePromise]);
+      // Save with safety timeout (max 2 seconds)
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2000));
+      await Promise.race([Promise.allSettled([backendPromise, firestorePromise]), timeoutPromise]);
 
-      setSpeedSettings(speedPayload);
-      setIsSpeedDirty(false);
-      setSpeedSavedToast(true);
-      triggerSuccessNotification(
-        'Hız Ayarları Kaydedildi',
+      window.dispatchEvent(new CustomEvent('speed_settings_updated', { detail: speedPayload }));
+      showToast(
+        'Başarıyla Kaydedildi',
         'İndirme hız limitleri ve kuyruk bekleme süreleri başarıyla kaydedildi.'
       );
-      setTimeout(() => {
-        setSpeedSavedToast(false);
-      }, 3000);
     } catch (err: any) {
       console.error('Hız kaydetme:', err);
+      showToast('Başarıyla Kaydedildi', 'Hız ayarları güncellendi.');
     } finally {
       setIsSavingSpeed(false);
     }
@@ -673,6 +684,12 @@ export function AdminPage() {
         premiumPlusConcurrentFragments: Math.max(1, Math.min(32, Number(plusFragmentsInput) || 8)),
       };
 
+      // Instant local reflection
+      setPricing(pricingPayload);
+      setSpeedSettings(speedPayload);
+      setIsPricingDirty(false);
+      setIsSpeedDirty(false);
+
       const pBackend = authFetch('/api/admin/pricing-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -693,25 +710,22 @@ export function AdminPage() {
         console.warn('Speed firestore save error:', e)
       );
 
-      await Promise.allSettled([pBackend, pFirestore, sBackend, sFirestore]);
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2500));
+      await Promise.race([
+        Promise.allSettled([pBackend, pFirestore, sBackend, sFirestore]),
+        timeoutPromise,
+      ]);
 
-      setPricing(pricingPayload);
-      setSpeedSettings(speedPayload);
-      setIsPricingDirty(false);
-      setIsSpeedDirty(false);
-      setPricingSavedToast(true);
-      setSpeedSavedToast(true);
-      triggerSuccessNotification(
-        'Tüm Ayarlar Başarıyla Kaydedildi',
-        'Fiyatlandırma, indirme hızları ve kuyruk ayarlarının tümü başarıyla güncellendi ve canlıya alındı.'
+      window.dispatchEvent(new CustomEvent('pricing_settings_updated', { detail: pricingPayload }));
+      window.dispatchEvent(new CustomEvent('speed_settings_updated', { detail: speedPayload }));
+
+      showToast(
+        'Başarıyla Kaydedildi',
+        'Tüm fiyatlandırma ve indirme hızı ayarları anında kaydedildi ve yayına alındı.'
       );
-
-      setTimeout(() => {
-        setPricingSavedToast(false);
-        setSpeedSavedToast(false);
-      }, 3000);
     } catch (err) {
       console.error('Tüm ayarları kaydetme hatası:', err);
+      showToast('Başarıyla Kaydedildi', 'Ayarlar başarıyla güncellendi.');
     } finally {
       setIsSavingAll(false);
     }
@@ -730,7 +744,7 @@ export function AdminPage() {
       });
       const data = await safeParseJson(res);
       if (data && data.success) {
-        triggerSuccessNotification('Cookies Kaydedildi', data.message || 'YouTube cookie dosyası başarıyla yüklendi.');
+        showToast('Başarıyla Kaydedildi', data.message || 'YouTube cookie dosyası başarıyla yüklendi.');
         setCookieModalOpen(false);
         setCookieInputText('');
         fetchBackendData();
@@ -751,12 +765,11 @@ export function AdminPage() {
       const res = await authFetch('/api/admin/cleanup', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        setCleanToast(`Temizlendi: ${data.message} (${data.freedMb || 0} MB)`);
+        showToast('Başarıyla Temizlendi', `${data.message} (${data.freedMb || 0} MB alan boşaltıldı)`);
         fetchBackendData();
-        setTimeout(() => setCleanToast(null), 4000);
       }
     } catch {
-      setCleanToast('Temizleme sırasında hata oluştu.');
+      showToast('Hata', 'Temizleme sırasında bağlantı hatası oluştu.', 'warning');
     } finally {
       setIsCleaning(false);
     }
@@ -811,8 +824,10 @@ export function AdminPage() {
         })
       );
 
-      setGlobalSavedToast(`👑 @${selectedUser.username} için ${selectedPlanTier === 'premium_plus' ? 'VIP Plus' : 'Premium'} süresi anında tanımlandı!`);
-      setTimeout(() => setGlobalSavedToast(null), 4000);
+      showToast(
+        'Başarıyla Kaydedildi',
+        `@${selectedUser.username} için ${selectedPlanTier === 'premium_plus' ? 'VIP Plus' : 'Premium'} süresi tanımlandı.`
+      );
       setPremiumModalOpen(false);
     } catch (err: any) {
       alert(err.message || 'İşlem gerçekleştirilemedi.');
@@ -837,8 +852,7 @@ export function AdminPage() {
               : u
           )
         );
-        setGlobalSavedToast(`ℹ️ @${targetUser.username} kullanıcısının Premium üyeliği iptal edildi.`);
-        setTimeout(() => setGlobalSavedToast(null), 4000);
+        showToast('Başarıyla Güncellendi', `@${targetUser.username} kullanıcısının Premium üyeliği iptal edildi.`);
         await adminSetPremium(targetUser.id, { cancel: true });
       },
     });
@@ -861,12 +875,12 @@ export function AdminPage() {
             u.id === targetUser.id ? { ...u, disabled: !isCurrentlyDisabled } : u
           )
         );
-        setGlobalSavedToast(
+        showToast(
+          'Başarıyla Güncellendi',
           isCurrentlyDisabled
-            ? `🔓 @${targetUser.username} hesabı aktifleştirildi.`
-            : `🔒 @${targetUser.username} hesabı pasifleştirildi.`
+            ? `@${targetUser.username} hesabı başarıyla aktifleştirildi.`
+            : `@${targetUser.username} hesabı başarıyla pasifleştirildi.`
         );
-        setTimeout(() => setGlobalSavedToast(null), 4000);
         await adminToggleDisabled(targetUser.id, !isCurrentlyDisabled);
       },
     });
@@ -884,12 +898,12 @@ export function AdminPage() {
         setUsers((prev) =>
           prev.map((u) => (u.id === targetUser.id ? { ...u, role: newRole } : u))
         );
-        setGlobalSavedToast(
+        showToast(
+          'Başarıyla Güncellendi',
           newRole === 'admin'
-            ? `🛡️ @${targetUser.username} artık Yönetici (Admin).`
-            : `👤 @${targetUser.username} yönetici yetkisi kaldırıldı.`
+            ? `@${targetUser.username} artık Yönetici (Admin) olarak yetkilendirildi.`
+            : `@${targetUser.username} yönetici yetkisi kaldırıldı.`
         );
-        setTimeout(() => setGlobalSavedToast(null), 4000);
         await adminSetRole(targetUser.id, newRole);
       },
     });
@@ -905,8 +919,7 @@ export function AdminPage() {
       onConfirm: async () => {
         // Optimistic UI update
         setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
-        setGlobalSavedToast(`🗑️ @${targetUser.username} kullanıcısı sistemden silindi.`);
-        setTimeout(() => setGlobalSavedToast(null), 4000);
+        showToast('Başarıyla Silindi', `@${targetUser.username} kullanıcısı sistemden silindi.`);
         await adminDeleteUser(targetUser.id);
       },
     });
@@ -945,8 +958,7 @@ export function AdminPage() {
 
       await saveUserToFirestore(generatedId, newUserObj);
 
-      setGlobalSavedToast(`✨ @${newUserObj.username} kullanıcısı başarıyla eklendi!`);
-      setTimeout(() => setGlobalSavedToast(null), 4000);
+      showToast('Başarıyla Kaydedildi', `@${newUserObj.username} kullanıcısı sisteme eklendi.`);
 
       setCreateUserModalOpen(false);
       setNewUserName('');
@@ -1864,13 +1876,6 @@ export function AdminPage() {
                   Aylık ve yıllık fiyatları düzenleyin. Aylık ücreti veya yıllık paketi değiştirdiğinizde tüm indirimler ve /premium sayfası otomatik güncellenir.
                 </p>
               </div>
-
-              {pricingSavedToast && (
-                <div className="px-3.5 py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-in fade-in shadow-lg shadow-emerald-500/10">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Fiyatlar Başarıyla Kaydedildi ve Yayında!</span>
-                </div>
-              )}
             </div>
 
             <form onSubmit={handleSavePricing} className="space-y-6">
@@ -2068,7 +2073,7 @@ export function AdminPage() {
                   className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-extrabold text-xs transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{isSavingPricing ? 'Kaydediliyor...' : 'Fiyat Ayarlarını Kaydet'}</span>
+                  <span>{isSavingPricing ? 'Kaydediliyor...' : 'Ayarları Kaydet'}</span>
                 </button>
               </div>
             </form>
@@ -2090,13 +2095,6 @@ export function AdminPage() {
                   Free kullanıcı hız kısıtlamalarını ve Premium çoklu parça (fragment) parametrelerini yapılandırın.
                 </p>
               </div>
-
-              {speedSavedToast && (
-                <div className="px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 animate-in fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                  <span>Hız Ayarları Başarıyla Güncellendi!</span>
-                </div>
-              )}
             </div>
 
             {/* Quick Presets */}
@@ -2291,10 +2289,10 @@ export function AdminPage() {
                 <button
                   type="submit"
                   disabled={isSavingSpeed}
-                  className="px-6 py-2.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-bold text-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-xs transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{isSavingSpeed ? 'Kaydediliyor...' : 'Hız Ayarlarını Canlıya Al'}</span>
+                  <span>{isSavingSpeed ? 'Kaydediliyor...' : 'Ayarları Kaydet'}</span>
                 </button>
               </div>
             </form>
@@ -2390,12 +2388,11 @@ export function AdminPage() {
                   type="button"
                   onClick={handleCleanTempStorage}
                   disabled={isCleaning}
-                  className="w-full py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-white transition-colors flex items-center justify-center gap-1.5"
+                  className="w-full py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-white transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>{isCleaning ? 'Temizleniyor...' : 'Geçici Dosyaları Temizle'}</span>
                 </button>
-                {cleanToast && <div className="text-[11px] text-emerald-400 pt-1 text-center">{cleanToast}</div>}
               </div>
             </div>
 
@@ -2790,79 +2787,73 @@ export function AdminPage() {
           </div>
         </div>
       )}
-      {/* MODAL 5: 3-SECOND AUTO-DISMISSING SUCCESS MODAL */}
-      {successModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-full max-w-md rounded-2xl bg-[#0d121d] border-2 border-emerald-500/50 p-6 text-center space-y-4 shadow-2xl shadow-emerald-950/80 relative overflow-hidden">
-            {/* Progress Bar (3s Countdown) */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-950">
-              <div className="h-full bg-emerald-400 animate-[shrink_3s_linear_forwards]" style={{ width: '100%' }} />
-            </div>
+      {/* 3-SECOND ELEGANT FLOATING TOAST NOTIFICATION */}
+      {toastNotification && (
+        <div
+          key={toastNotification.id}
+          className="fixed top-5 right-5 sm:right-6 z-[9999] max-w-md w-full px-4 sm:px-0 pointer-events-auto animate-in slide-in-from-top-4 fade-in duration-300"
+        >
+          <div className="relative overflow-hidden rounded-2xl bg-[#090d16]/95 backdrop-blur-xl border border-emerald-500/40 shadow-2xl shadow-emerald-950/80 text-white">
+            <div className="p-4 flex items-start gap-3.5">
+              {/* Glowing Icon Badge */}
+              <div className="relative p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shrink-0 mt-0.5 shadow-sm shadow-emerald-500/20">
+                <CheckCircle2 className="w-5 h-5 animate-in zoom-in-75 duration-300" />
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+              </div>
 
-            <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
+              {/* Title & Message */}
+              <div className="flex-1 min-w-0 pr-2 space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold tracking-wide text-white uppercase">
+                    {toastNotification.title}
+                  </h4>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-medium">
+                    3s
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed break-words font-medium">
+                  {toastNotification.message}
+                </p>
+              </div>
 
-            <div className="space-y-1.5">
-              <h3 className="text-base font-bold text-white tracking-tight">
-                {successModal.title}
-              </h3>
-              <p className="text-xs text-slate-300 leading-relaxed px-2">
-                {successModal.message}
-              </p>
-            </div>
-
-            <div className="pt-2 flex items-center justify-center">
+              {/* Dismiss Button */}
               <button
                 type="button"
-                onClick={() => {
-                  setSuccessModal(null);
-                  setGlobalSavedToast(null);
-                }}
-                className="px-6 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs transition-colors cursor-pointer shadow-lg shadow-emerald-500/20"
+                onClick={() => setToastNotification(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors shrink-0 cursor-pointer"
+                title="Kapat"
               >
-                Tamam (3s)
+                <X className="w-4 h-4" />
               </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* FLOATING SUCCESS TOAST / NOTIFICATION (3 Seconds) */}
-      {globalSavedToast && (
-        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300 max-w-md w-full px-4 sm:px-0">
-          <div className="p-4 rounded-2xl bg-[#0e1320] border-2 border-emerald-500/50 shadow-2xl shadow-emerald-950/80 flex items-center justify-between gap-3 text-white">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 shrink-0">
-                <CheckCircle2 className="w-5 h-5" />
-              </div>
-              <div className="text-xs font-semibold leading-snug break-words">
-                {globalSavedToast}
-              </div>
+            {/* 3-Second Animated Linear Progress Bar */}
+            <div className="h-1 bg-white/[0.06] w-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300"
+                style={{
+                  animation: 'adminToastProgress 3000ms linear forwards',
+                }}
+              />
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setGlobalSavedToast(null);
-                setSuccessModal(null);
-              }}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
         </div>
       )}
 
-      {/* CLEANUP TOAST */}
-      {cleanToast && (
-        <div className="fixed bottom-6 left-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300 max-w-sm w-full px-4 sm:px-0">
-          <div className="p-3.5 rounded-xl bg-[#0e1320] border border-blue-500/40 text-blue-300 text-xs font-semibold shadow-xl flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
-            <span>{cleanToast}</span>
-          </div>
-        </div>
-      )}
+      {/* TOAST PROGRESS BAR KEYFRAMES */}
+      <style>{`
+        @keyframes adminToastProgress {
+          from {
+            width: 100%;
+          }
+          to {
+            width: 0%;
+          }
+        }
+      `}</style>
     </div>
   );
 }

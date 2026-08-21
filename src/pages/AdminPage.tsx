@@ -107,10 +107,31 @@ export function AdminPage() {
   const [pricing, setPricing] = useState<PricingSettings>(DEFAULT_PRICING);
   const [premiumMonthlyInput, setPremiumMonthlyInput] = useState<number>(DEFAULT_PRICING.premiumMonthly);
   const [premiumDiscountInput, setPremiumDiscountInput] = useState<number>(DEFAULT_PRICING.premiumDiscountPercent);
+  const [premiumYearlyInput, setPremiumYearlyInput] = useState<number>(
+    Math.round(DEFAULT_PRICING.premiumMonthly * (1 - DEFAULT_PRICING.premiumDiscountPercent / 100)) * 12
+  );
   const [plusMonthlyInput, setPlusMonthlyInput] = useState<number>(DEFAULT_PRICING.premiumPlusMonthly);
   const [plusDiscountInput, setPlusDiscountInput] = useState<number>(DEFAULT_PRICING.premiumPlusDiscountPercent);
+  const [plusYearlyInput, setPlusYearlyInput] = useState<number>(
+    Math.round(DEFAULT_PRICING.premiumPlusMonthly * (1 - DEFAULT_PRICING.premiumPlusDiscountPercent / 100)) * 12
+  );
   const [isSavingPricing, setIsSavingPricing] = useState(false);
   const [pricingSavedToast, setPricingSavedToast] = useState(false);
+  const [globalSavedToast, setGlobalSavedToast] = useState<string | null>(null);
+  const [isSavingAll, setIsSavingAll] = useState(false);
+  // Success Alert Modal State (auto dismiss after 3 seconds)
+  const [successModal, setSuccessModal] = useState<{ title: string; message: string } | null>(null);
+
+  const triggerSuccessNotification = (title: string, message: string) => {
+    setSuccessModal({ title, message });
+    setGlobalSavedToast(`${title}: ${message}`);
+    setTimeout(() => {
+      setSuccessModal(null);
+    }, 3000);
+    setTimeout(() => {
+      setGlobalSavedToast(null);
+    }, 3000);
+  };
 
   // Download Speed & Queue State
   const [speedSettings, setSpeedSettings] = useState<SpeedSettings>(DEFAULT_SPEED_SETTINGS);
@@ -205,10 +226,18 @@ export function AdminPage() {
         const pData = await safeParseJson(pRes.value);
         if (pData && pData.success && pData.data) {
           setPricing(pData.data);
-          setPremiumMonthlyInput(pData.data.premiumMonthly || 69);
-          setPremiumDiscountInput(pData.data.premiumDiscountPercent || 30);
-          setPlusMonthlyInput(pData.data.premiumPlusMonthly || 119);
-          setPlusDiscountInput(pData.data.premiumPlusDiscountPercent || 25);
+          const pm = pData.data.premiumMonthly || 69;
+          const pd = pData.data.premiumDiscountPercent || 30;
+          const ppm = pData.data.premiumPlusMonthly || 119;
+          const ppd = pData.data.premiumPlusDiscountPercent || 25;
+
+          setPremiumMonthlyInput(pm);
+          setPremiumDiscountInput(pd);
+          setPremiumYearlyInput(Math.round(pm * (1 - pd / 100)) * 12);
+
+          setPlusMonthlyInput(ppm);
+          setPlusDiscountInput(ppd);
+          setPlusYearlyInput(Math.round(ppm * (1 - ppd / 100)) * 12);
         }
       }
 
@@ -252,10 +281,18 @@ export function AdminPage() {
 
     const unsubscribePricing = subscribeToPricingSettings((livePricing) => {
       setPricing(livePricing);
-      setPremiumMonthlyInput(livePricing.premiumMonthly);
-      setPremiumDiscountInput(livePricing.premiumDiscountPercent);
-      setPlusMonthlyInput(livePricing.premiumPlusMonthly);
-      setPlusDiscountInput(livePricing.premiumPlusDiscountPercent);
+      const pm = livePricing.premiumMonthly || 69;
+      const pd = livePricing.premiumDiscountPercent || 30;
+      const ppm = livePricing.premiumPlusMonthly || 119;
+      const ppd = livePricing.premiumPlusDiscountPercent || 25;
+
+      setPremiumMonthlyInput(pm);
+      setPremiumDiscountInput(pd);
+      setPremiumYearlyInput(Math.round(pm * (1 - pd / 100)) * 12);
+
+      setPlusMonthlyInput(ppm);
+      setPlusDiscountInput(ppd);
+      setPlusYearlyInput(Math.round(ppm * (1 - ppd / 100)) * 12);
     });
 
     const unsubscribeSpeed = subscribeToSpeedSettings((liveSpeeds) => {
@@ -270,23 +307,81 @@ export function AdminPage() {
 
     fetchBackendData();
 
+    // Auto-refresh stats periodically in the background (every 10s)
+    const statsInterval = setInterval(() => {
+      fetchBackendData();
+    }, 10000);
+
     return () => {
       unsubscribeUsers();
       unsubscribePricing();
       unsubscribeSpeed();
+      clearInterval(statsInterval);
     };
   }, [isAdmin]);
 
-  // Derived Pricing Calculations
+  // Derived Pricing Calculations & Sync Helpers
+  // When monthly changes, auto calculate yearly and per-month rate
+  const handlePremiumMonthlyChange = (val: number) => {
+    const safeVal = Math.max(1, val);
+    setPremiumMonthlyInput(safeVal);
+    const yearly = Math.round(safeVal * (1 - premiumDiscountInput / 100)) * 12;
+    setPremiumYearlyInput(yearly);
+  };
+
+  const handlePremiumDiscountChange = (val: number) => {
+    const safeVal = Math.min(90, Math.max(0, val));
+    setPremiumDiscountInput(safeVal);
+    const yearly = Math.round(premiumMonthlyInput * (1 - safeVal / 100)) * 12;
+    setPremiumYearlyInput(yearly);
+  };
+
+  const handlePremiumYearlyChange = (val: number) => {
+    const safeVal = Math.max(1, val);
+    setPremiumYearlyInput(safeVal);
+    // Reverse calculate discount percent if monthly is known
+    if (premiumMonthlyInput > 0) {
+      const fullYearCost = premiumMonthlyInput * 12;
+      const diff = fullYearCost - safeVal;
+      const calculatedDiscount = Math.min(90, Math.max(0, Math.round((diff / fullYearCost) * 100)));
+      setPremiumDiscountInput(calculatedDiscount);
+    }
+  };
+
+  const handlePlusMonthlyChange = (val: number) => {
+    const safeVal = Math.max(1, val);
+    setPlusMonthlyInput(safeVal);
+    const yearly = Math.round(safeVal * (1 - plusDiscountInput / 100)) * 12;
+    setPlusYearlyInput(yearly);
+  };
+
+  const handlePlusDiscountChange = (val: number) => {
+    const safeVal = Math.min(90, Math.max(0, val));
+    setPlusDiscountInput(safeVal);
+    const yearly = Math.round(plusMonthlyInput * (1 - safeVal / 100)) * 12;
+    setPlusYearlyInput(yearly);
+  };
+
+  const handlePlusYearlyChange = (val: number) => {
+    const safeVal = Math.max(1, val);
+    setPlusYearlyInput(safeVal);
+    if (plusMonthlyInput > 0) {
+      const fullYearCost = plusMonthlyInput * 12;
+      const diff = fullYearCost - safeVal;
+      const calculatedDiscount = Math.min(90, Math.max(0, Math.round((diff / fullYearCost) * 100)));
+      setPlusDiscountInput(calculatedDiscount);
+    }
+  };
+
   const calculatedPremiumYearlyPerMonth = Math.round(
     premiumMonthlyInput * (1 - premiumDiscountInput / 100)
   );
-  const calculatedPremiumYearlyTotal = calculatedPremiumYearlyPerMonth * 12;
+  const calculatedPremiumYearlyTotal = premiumYearlyInput || (calculatedPremiumYearlyPerMonth * 12);
 
   const calculatedPlusYearlyPerMonth = Math.round(
     plusMonthlyInput * (1 - plusDiscountInput / 100)
   );
-  const calculatedPlusYearlyTotal = calculatedPlusYearlyPerMonth * 12;
+  const calculatedPlusYearlyTotal = plusYearlyInput || (calculatedPlusYearlyPerMonth * 12);
 
   // Real Statistics Calculations from live users & dashboard data
   const totalUsersCount = users.length;
@@ -383,8 +478,8 @@ export function AdminPage() {
   }, [dashboardData, downloadFilter, downloadSearch]);
 
   // Handle Save Pricing Settings
-  const handleSavePricing = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSavePricing = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsSavingPricing(true);
     const pricingPayload = {
       premiumMonthly: Number(premiumMonthlyInput) || 69,
@@ -408,7 +503,13 @@ export function AdminPage() {
 
       setPricing(pricingPayload);
       setPricingSavedToast(true);
-      setTimeout(() => setPricingSavedToast(false), 3500);
+      triggerSuccessNotification(
+        'Fiyat Ayarları Kaydedildi',
+        'Premium paket ve yıllık fiyat ayarları başarıyla kaydedildi ve tüm sistemde yayına alındı.'
+      );
+      setTimeout(() => {
+        setPricingSavedToast(false);
+      }, 3000);
     } catch (err: any) {
       console.error('Fiyat kaydetme:', err);
     } finally {
@@ -417,8 +518,8 @@ export function AdminPage() {
   };
 
   // Handle Save Speed Settings
-  const handleSaveSpeed = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveSpeed = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsSavingSpeed(true);
     const speedPayload = {
       freeSpeedLimitKbps: Number(freeSpeedInput) || 0,
@@ -444,11 +545,79 @@ export function AdminPage() {
 
       setSpeedSettings(speedPayload);
       setSpeedSavedToast(true);
-      setTimeout(() => setSpeedSavedToast(false), 3500);
+      triggerSuccessNotification(
+        'Hız Ayarları Kaydedildi',
+        'İndirme hız limitleri ve kuyruk bekleme süreleri başarıyla kaydedildi.'
+      );
+      setTimeout(() => {
+        setSpeedSavedToast(false);
+      }, 3000);
     } catch (err: any) {
       console.error('Hız kaydetme:', err);
     } finally {
       setIsSavingSpeed(false);
+    }
+  };
+
+  // Handle Save All System Settings
+  const handleSaveAllSettings = async () => {
+    setIsSavingAll(true);
+    try {
+      const pricingPayload = {
+        premiumMonthly: Number(premiumMonthlyInput) || 69,
+        premiumDiscountPercent: Number(premiumDiscountInput) || 30,
+        premiumPlusMonthly: Number(plusMonthlyInput) || 119,
+        premiumPlusDiscountPercent: Number(plusDiscountInput) || 25,
+      };
+
+      const speedPayload = {
+        freeSpeedLimitKbps: Number(freeSpeedInput) || 0,
+        freeQueueDelaySeconds: Number(freeQueueDelayInput) || 0,
+        premiumSpeedLimitKbps: Number(premiumSpeedInput) || 0,
+        premiumConcurrentFragments: Number(premiumFragmentsInput) || 4,
+        premiumPlusSpeedLimitKbps: Number(plusSpeedInput) || 0,
+        premiumPlusConcurrentFragments: Number(plusFragmentsInput) || 8,
+      };
+
+      const pBackend = authFetch('/api/admin/pricing-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pricingPayload),
+      }).catch((e) => console.warn('Pricing backend save error:', e));
+
+      const pFirestore = updatePricingSettingsInFirestore(pricingPayload).catch((e) =>
+        console.warn('Pricing firestore save error:', e)
+      );
+
+      const sBackend = authFetch('/api/admin/speed-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(speedPayload),
+      }).catch((e) => console.warn('Speed backend save error:', e));
+
+      const sFirestore = updateSpeedSettingsInFirestore(speedPayload).catch((e) =>
+        console.warn('Speed firestore save error:', e)
+      );
+
+      await Promise.allSettled([pBackend, pFirestore, sBackend, sFirestore]);
+
+      setPricing(pricingPayload);
+      setSpeedSettings(speedPayload);
+      setPricingSavedToast(true);
+      setSpeedSavedToast(true);
+      triggerSuccessNotification(
+        'Tüm Ayarlar Başarıyla Kaydedildi',
+        'Fiyatlandırma, indirme hızları ve kuyruk ayarlarının tümü başarıyla güncellendi ve canlıya alındı.'
+      );
+
+      setTimeout(() => {
+        setPricingSavedToast(false);
+        setSpeedSavedToast(false);
+      }, 3000);
+    } catch (err) {
+      console.error('Tüm ayarları kaydetme hatası:', err);
+    } finally {
+      setIsSavingAll(false);
     }
   };
 
@@ -494,6 +663,32 @@ export function AdminPage() {
         days,
       });
 
+      // Optimistic instant state update for immediate zero-F5 feedback
+      setUsers((prev) =>
+        prev.map((u) => {
+          if (u.id !== selectedUser.id) return u;
+          let addedMs = 0;
+          if (selectedDuration === '1_month') addedMs = 30 * 24 * 60 * 60 * 1000;
+          else if (selectedDuration === '3_months') addedMs = 90 * 24 * 60 * 60 * 1000;
+          else if (selectedDuration === '6_months') addedMs = 180 * 24 * 60 * 60 * 1000;
+          else if (selectedDuration === '1_year') addedMs = 365 * 24 * 60 * 60 * 1000;
+          else if (selectedDuration === '2_years') addedMs = 730 * 24 * 60 * 60 * 1000;
+          else if (selectedDuration === 'custom') addedMs = customDays * 24 * 60 * 60 * 1000;
+
+          const now = Date.now();
+          const base = u.premiumExpiresAt && u.premiumExpiresAt > now ? u.premiumExpiresAt : now;
+          return {
+            ...u,
+            plan: selectedPlanTier,
+            premiumActive: true,
+            premiumStartedAt: u.premiumStartedAt || now,
+            premiumExpiresAt: base + addedMs,
+          };
+        })
+      );
+
+      setGlobalSavedToast(`👑 @${selectedUser.username} için ${selectedPlanTier === 'premium_plus' ? 'VIP Plus' : 'Premium'} süresi anında tanımlandı!`);
+      setTimeout(() => setGlobalSavedToast(null), 4000);
       setPremiumModalOpen(false);
     } catch (err: any) {
       alert(err.message || 'İşlem gerçekleştirilemedi.');
@@ -510,6 +705,16 @@ export function AdminPage() {
       description: `@${targetUser.username} (${targetUser.name}) kullanıcısının Premium üyeliği derhal iptal edilecek ve ücretsiz Free plana düşürülecektir. Onaylıyor musunuz?`,
       danger: true,
       onConfirm: async () => {
+        // Optimistic UI update
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === targetUser.id
+              ? { ...u, plan: 'free', premiumActive: false, premiumExpiresAt: null }
+              : u
+          )
+        );
+        setGlobalSavedToast(`ℹ️ @${targetUser.username} kullanıcısının Premium üyeliği iptal edildi.`);
+        setTimeout(() => setGlobalSavedToast(null), 4000);
         await adminSetPremium(targetUser.id, { cancel: true });
       },
     });
@@ -526,6 +731,18 @@ export function AdminPage() {
         : `@${targetUser.username} kullanıcısı geçici olarak pasife alınacak. Giriş yapamayacaktır.`,
       danger: !isCurrentlyDisabled,
       onConfirm: async () => {
+        // Optimistic UI update
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === targetUser.id ? { ...u, disabled: !isCurrentlyDisabled } : u
+          )
+        );
+        setGlobalSavedToast(
+          isCurrentlyDisabled
+            ? `🔓 @${targetUser.username} hesabı aktifleştirildi.`
+            : `🔒 @${targetUser.username} hesabı pasifleştirildi.`
+        );
+        setTimeout(() => setGlobalSavedToast(null), 4000);
         await adminToggleDisabled(targetUser.id, !isCurrentlyDisabled);
       },
     });
@@ -539,6 +756,16 @@ export function AdminPage() {
       title: newRole === 'admin' ? 'Yönetici Yetkisi Ver' : 'Yönetici Yetkisini Kaldır',
       description: `@${targetUser.username} kullanıcısının sistem rolü "${newRole.toUpperCase()}" olarak değiştirilecektir. Onaylıyor musunuz?`,
       onConfirm: async () => {
+        // Optimistic UI update
+        setUsers((prev) =>
+          prev.map((u) => (u.id === targetUser.id ? { ...u, role: newRole } : u))
+        );
+        setGlobalSavedToast(
+          newRole === 'admin'
+            ? `🛡️ @${targetUser.username} artık Yönetici (Admin).`
+            : `👤 @${targetUser.username} yönetici yetkisi kaldırıldı.`
+        );
+        setTimeout(() => setGlobalSavedToast(null), 4000);
         await adminSetRole(targetUser.id, newRole);
       },
     });
@@ -552,6 +779,10 @@ export function AdminPage() {
       description: `@${targetUser.username} (${targetUser.email}) hesabı ve bağlı tüm veriler kalıcı olarak silinecektir. Bu işlem GERİ ALINAMAZ!`,
       danger: true,
       onConfirm: async () => {
+        // Optimistic UI update
+        setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
+        setGlobalSavedToast(`🗑️ @${targetUser.username} kullanıcısı sistemden silindi.`);
+        setTimeout(() => setGlobalSavedToast(null), 4000);
         await adminDeleteUser(targetUser.id);
       },
     });
@@ -569,7 +800,7 @@ export function AdminPage() {
       const expiresAt =
         newUserPlan !== 'free' ? now + 30 * 24 * 60 * 60 * 1000 : null;
 
-      await saveUserToFirestore(generatedId, {
+      const newUserObj: User = {
         id: generatedId,
         name: newUserName.trim() || newUserEmail.split('@')[0],
         username: newUserEmail.split('@')[0].toLowerCase(),
@@ -579,9 +810,19 @@ export function AdminPage() {
         premiumActive: newUserPlan !== 'free',
         premiumStartedAt: newUserPlan !== 'free' ? now : null,
         premiumExpiresAt: expiresAt,
+        remainingDays: expiresAt ? 30 : null,
+        remainingFormatted: expiresAt ? '30 gün kaldı' : 'Süresiz',
         createdAt: now,
         updatedAt: now,
-      });
+      };
+
+      // Optimistic UI update
+      setUsers((prev) => [newUserObj, ...prev]);
+
+      await saveUserToFirestore(generatedId, newUserObj);
+
+      setGlobalSavedToast(`✨ @${newUserObj.username} kullanıcısı başarıyla eklendi!`);
+      setTimeout(() => setGlobalSavedToast(null), 4000);
 
       setCreateUserModalOpen(false);
       setNewUserName('');
@@ -665,6 +906,19 @@ export function AdminPage() {
 
           {/* User Info & Actions */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Direct Global Save Settings Button */}
+            <button
+              type="button"
+              onClick={handleSaveAllSettings}
+              disabled={isSavingAll}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-extrabold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
+              title="Tüm Ayarları (Fiyat ve Hız) Kaydet ve Canlıya Al"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{isSavingAll ? 'Kaydediliyor...' : 'Ayarları Kaydet'}</span>
+              <span className="sm:hidden">{isSavingAll ? '...' : 'Kaydet'}</span>
+            </button>
+
             {/* Refresh Button */}
             <button
               type="button"
@@ -1483,14 +1737,14 @@ export function AdminPage() {
                   Premium Paket Fiyatlandırma Yönetimi
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Aylık fiyatları ve yıllık indirim oranlarını anlık değiştirin. Yıllık toplam ve aylık eşdeğeri otomatik hesaplanır.
+                  Aylık ve yıllık fiyatları düzenleyin. Aylık ücreti veya yıllık paketi değiştirdiğinizde tüm indirimler ve /premium sayfası otomatik güncellenir.
                 </p>
               </div>
 
               {pricingSavedToast && (
-                <div className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 animate-in fade-in">
+                <div className="px-3.5 py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-in fade-in shadow-lg shadow-emerald-500/10">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Fiyatlar Güncellendi ve Yayında!</span>
+                  <span>Fiyatlar Başarıyla Kaydedildi ve Yayında!</span>
                 </div>
               )}
             </div>
@@ -1504,12 +1758,12 @@ export function AdminPage() {
                       <Crown className="w-4 h-4 text-amber-400" />
                       <span className="text-sm font-bold text-white">IMGIVO Standard Premium</span>
                     </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-400/10 text-amber-300">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-400/10 text-amber-300 font-bold">
                       2K / 4K / 320k HQ
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[11px] font-semibold text-slate-300">Aylık Fiyat (₺)</label>
                       <div className="relative">
@@ -1519,7 +1773,7 @@ export function AdminPage() {
                           min={1}
                           max={9999}
                           value={premiumMonthlyInput}
-                          onChange={(e) => setPremiumMonthlyInput(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                          onChange={(e) => handlePremiumMonthlyChange(parseInt(e.target.value, 10) || 0)}
                           className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
                           required
                         />
@@ -1534,7 +1788,7 @@ export function AdminPage() {
                           min={0}
                           max={90}
                           value={premiumDiscountInput}
-                          onChange={(e) => setPremiumDiscountInput(Math.min(90, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                          onChange={(e) => handlePremiumDiscountChange(parseInt(e.target.value, 10) || 0)}
                           className="w-full pl-3 pr-7 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
                           required
                         />
@@ -1543,13 +1797,29 @@ export function AdminPage() {
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-lg bg-amber-400/[0.06] border border-amber-400/20 text-xs space-y-1">
+                  {/* Direct Editable Yearly Total */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-300">Yıllık Toplam Fiyat (₺/yıl)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₺</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99999}
+                        value={calculatedPremiumYearlyTotal}
+                        onChange={(e) => handlePremiumYearlyChange(parseInt(e.target.value, 10) || 0)}
+                        className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-amber-400/30 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-amber-400/[0.06] border border-amber-400/20 text-xs space-y-1.5">
                     <div className="flex justify-between text-slate-300">
-                      <span>Otomatik Yıllık Aylık Eşdeğeri:</span>
+                      <span>Yıllık Alımda Aylık Karşılığı:</span>
                       <span className="font-mono font-bold text-emerald-400">₺{calculatedPremiumYearlyPerMonth} / ay</span>
                     </div>
                     <div className="flex justify-between text-slate-400 text-[11px]">
-                      <span>Yıllık Toplam:</span>
+                      <span>Yıllık Faturalandırılacak Tutar:</span>
                       <span className="font-mono font-semibold text-white">₺{calculatedPremiumYearlyTotal} / yıl</span>
                     </div>
                   </div>
@@ -1562,12 +1832,12 @@ export function AdminPage() {
                       <Sparkles className="w-4 h-4 text-purple-400" />
                       <span className="text-sm font-bold text-white">Premium Plus (VIP)</span>
                     </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 font-bold">
                       4K 60FPS / Ultra Turbo
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[11px] font-semibold text-slate-300">Aylık Fiyat (₺)</label>
                       <div className="relative">
@@ -1577,7 +1847,7 @@ export function AdminPage() {
                           min={1}
                           max={9999}
                           value={plusMonthlyInput}
-                          onChange={(e) => setPlusMonthlyInput(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                          onChange={(e) => handlePlusMonthlyChange(parseInt(e.target.value, 10) || 0)}
                           className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-purple-400"
                           required
                         />
@@ -1592,7 +1862,7 @@ export function AdminPage() {
                           min={0}
                           max={90}
                           value={plusDiscountInput}
-                          onChange={(e) => setPlusDiscountInput(Math.min(90, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                          onChange={(e) => handlePlusDiscountChange(parseInt(e.target.value, 10) || 0)}
                           className="w-full pl-3 pr-7 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-purple-400"
                           required
                         />
@@ -1601,27 +1871,46 @@ export function AdminPage() {
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-lg bg-purple-500/[0.06] border border-purple-500/20 text-xs space-y-1">
+                  {/* Direct Editable Yearly Total */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-300">Yıllık Toplam Fiyat (₺/yıl)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₺</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99999}
+                        value={calculatedPlusYearlyTotal}
+                        onChange={(e) => handlePlusYearlyChange(parseInt(e.target.value, 10) || 0)}
+                        className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-purple-500/30 text-xs font-mono font-bold text-purple-300 focus:outline-none focus:border-purple-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-purple-500/[0.06] border border-purple-500/20 text-xs space-y-1.5">
                     <div className="flex justify-between text-slate-300">
-                      <span>Otomatik Yıllık Aylık Eşdeğeri:</span>
+                      <span>Yıllık Alımda Aylık Karşılığı:</span>
                       <span className="font-mono font-bold text-purple-300">₺{calculatedPlusYearlyPerMonth} / ay</span>
                     </div>
                     <div className="flex justify-between text-slate-400 text-[11px]">
-                      <span>Yıllık Toplam:</span>
+                      <span>Yıllık Faturalandırılacak Tutar:</span>
                       <span className="font-mono font-semibold text-white">₺{calculatedPlusYearlyTotal} / yıl</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                <p className="text-xs text-slate-400">
+                  Değişiklikleri kaydettikten sonra <strong className="text-white">/premium</strong> sayfasındaki tüm fiyatlar ve tasarruf rozetleri anında güncellenir.
+                </p>
                 <button
                   type="submit"
                   disabled={isSavingPricing}
-                  className="px-6 py-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-extrabold text-xs transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{isSavingPricing ? 'Kaydediliyor...' : 'Fiyat Değişikliklerini Canlıya Al'}</span>
+                  <span>{isSavingPricing ? 'Kaydediliyor...' : 'Fiyat Ayarlarını Kaydet'}</span>
                 </button>
               </div>
             </form>
@@ -2213,6 +2502,79 @@ export function AdminPage() {
                 Onayla
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL 5: 3-SECOND AUTO-DISMISSING SUCCESS MODAL */}
+      {successModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-md rounded-2xl bg-[#0d121d] border-2 border-emerald-500/50 p-6 text-center space-y-4 shadow-2xl shadow-emerald-950/80 relative overflow-hidden">
+            {/* Progress Bar (3s Countdown) */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-950">
+              <div className="h-full bg-emerald-400 animate-[shrink_3s_linear_forwards]" style={{ width: '100%' }} />
+            </div>
+
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-white tracking-tight">
+                {successModal.title}
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed px-2">
+                {successModal.message}
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setSuccessModal(null);
+                  setGlobalSavedToast(null);
+                }}
+                className="px-6 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs transition-colors cursor-pointer shadow-lg shadow-emerald-500/20"
+              >
+                Tamam (3s)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING SUCCESS TOAST / NOTIFICATION (3 Seconds) */}
+      {globalSavedToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300 max-w-md w-full px-4 sm:px-0">
+          <div className="p-4 rounded-2xl bg-[#0e1320] border-2 border-emerald-500/50 shadow-2xl shadow-emerald-950/80 flex items-center justify-between gap-3 text-white">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div className="text-xs font-semibold leading-snug break-words">
+                {globalSavedToast}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setGlobalSavedToast(null);
+                setSuccessModal(null);
+              }}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CLEANUP TOAST */}
+      {cleanToast && (
+        <div className="fixed bottom-6 left-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300 max-w-sm w-full px-4 sm:px-0">
+          <div className="p-3.5 rounded-xl bg-[#0e1320] border border-blue-500/40 text-blue-300 text-xs font-semibold shadow-xl flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+            <span>{cleanToast}</span>
           </div>
         </div>
       )}

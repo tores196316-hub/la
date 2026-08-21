@@ -383,15 +383,17 @@ class UserService {
     return { success: true, user: sanitizeUser(targetUser), token };
   }
 
-  // Session Token management
-  public createSession(userId: string, durationMs = 7 * 24 * 60 * 60 * 1000): string {
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${userId}:${rawToken}`).digest('hex');
-    const token = `${userId}.${rawToken}.${signature}`;
+  // Session Token management (Stateless & Restart-resilient)
+  public createSession(userId: string, durationMs = 30 * 24 * 60 * 60 * 1000): string {
+    const expiresAt = Date.now() + durationMs;
+    const randomNonce = crypto.randomBytes(16).toString('hex');
+    const payload = `${userId}.${expiresAt}.${randomNonce}`;
+    const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
+    const token = `${payload}.${signature}`;
     
     activeSessions.set(token, {
       userId,
-      expiresAt: Date.now() + durationMs,
+      expiresAt,
     });
 
     return token;
@@ -406,10 +408,9 @@ class UserService {
     if (!cleanToken) return null;
 
     const parts = cleanToken.split('.');
-    if (parts.length !== 3) return null;
 
-    // Case 1: Firebase Auth JWT Token (Header starts with eyJ...)
-    if (parts[0].startsWith('ey')) {
+    // Case 1: Firebase Auth JWT Token (3 parts, starts with ey...)
+    if (parts.length === 3 && parts[0].startsWith('ey')) {
       try {
         const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8');
         const payload = JSON.parse(payloadJson);
@@ -428,7 +429,6 @@ class UserService {
 
         let user = this.users.get(uid);
         if (!user && email) {
-          // Check by email in case of ID difference
           user = Array.from(this.users.values()).find((u) => u.email.toLowerCase() === email);
         }
 
@@ -469,29 +469,41 @@ class UserService {
       }
     }
 
-    // Case 2: IMGIVO Custom HMAC Token (userId.rawToken.signature)
-    const [userId, rawToken, signature] = parts;
-    const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(`${userId}:${rawToken}`).digest('hex');
-    
-    try {
-      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+    // Case 2: IMGIVO 4-part Stateless HMAC Token (userId.expiresAt.randomNonce.signature)
+    if (parts.length === 4) {
+      const [userId, expiresAtStr, randomNonce, signature] = parts;
+      const expiresAt = parseInt(expiresAtStr, 10);
+      if (isNaN(expiresAt) || expiresAt < Date.now()) {
         return null;
       }
-    } catch {
-      return null;
+
+      const payload = `${userId}.${expiresAtStr}.${randomNonce}`;
+      const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
+      try {
+        if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+
+      const user = this.users.get(userId);
+      if (user) return user;
     }
 
-    // Check expiration in session map or decode
-    const session = activeSessions.get(cleanToken);
-    if (session && session.expiresAt < Date.now()) {
-      activeSessions.delete(cleanToken);
-      return null;
+    // Case 3: Legacy 3-part HMAC Token (userId.rawToken.signature)
+    if (parts.length === 3) {
+      const [userId, rawToken, signature] = parts;
+      const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(`${userId}:${rawToken}`).digest('hex');
+      try {
+        if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+          const user = this.users.get(userId);
+          if (user) return user;
+        }
+      } catch {}
     }
 
-    const user = this.users.get(userId);
-    if (!user) return null;
-
-    return user;
+    return null;
   }
 
   // Upsert user synced from Client/Firestore

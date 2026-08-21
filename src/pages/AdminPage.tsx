@@ -105,16 +105,17 @@ export function AdminPage() {
 
   // Pricing State
   const [pricing, setPricing] = useState<PricingSettings>(DEFAULT_PRICING);
-  const [premiumMonthlyInput, setPremiumMonthlyInput] = useState<number>(DEFAULT_PRICING.premiumMonthly);
-  const [premiumDiscountInput, setPremiumDiscountInput] = useState<number>(DEFAULT_PRICING.premiumDiscountPercent);
-  const [premiumYearlyInput, setPremiumYearlyInput] = useState<number>(
-    Math.round(DEFAULT_PRICING.premiumMonthly * (1 - DEFAULT_PRICING.premiumDiscountPercent / 100)) * 12
+  const [premiumMonthlyInput, setPremiumMonthlyInput] = useState<string>(String(DEFAULT_PRICING.premiumMonthly));
+  const [premiumDiscountInput, setPremiumDiscountInput] = useState<string>(String(DEFAULT_PRICING.premiumDiscountPercent));
+  const [premiumYearlyInput, setPremiumYearlyInput] = useState<string>(
+    String(Math.round(DEFAULT_PRICING.premiumMonthly * (1 - DEFAULT_PRICING.premiumDiscountPercent / 100)) * 12)
   );
-  const [plusMonthlyInput, setPlusMonthlyInput] = useState<number>(DEFAULT_PRICING.premiumPlusMonthly);
-  const [plusDiscountInput, setPlusDiscountInput] = useState<number>(DEFAULT_PRICING.premiumPlusDiscountPercent);
-  const [plusYearlyInput, setPlusYearlyInput] = useState<number>(
-    Math.round(DEFAULT_PRICING.premiumPlusMonthly * (1 - DEFAULT_PRICING.premiumPlusDiscountPercent / 100)) * 12
+  const [plusMonthlyInput, setPlusMonthlyInput] = useState<string>(String(DEFAULT_PRICING.premiumPlusMonthly));
+  const [plusDiscountInput, setPlusDiscountInput] = useState<string>(String(DEFAULT_PRICING.premiumPlusDiscountPercent));
+  const [plusYearlyInput, setPlusYearlyInput] = useState<string>(
+    String(Math.round(DEFAULT_PRICING.premiumPlusMonthly * (1 - DEFAULT_PRICING.premiumPlusDiscountPercent / 100)) * 12)
   );
+  const [isPricingDirty, setIsPricingDirty] = useState(false);
   const [isSavingPricing, setIsSavingPricing] = useState(false);
   const [pricingSavedToast, setPricingSavedToast] = useState(false);
   const [globalSavedToast, setGlobalSavedToast] = useState<string | null>(null);
@@ -135,14 +136,20 @@ export function AdminPage() {
 
   // Download Speed & Queue State
   const [speedSettings, setSpeedSettings] = useState<SpeedSettings>(DEFAULT_SPEED_SETTINGS);
-  const [freeSpeedInput, setFreeSpeedInput] = useState<number>(DEFAULT_SPEED_SETTINGS.freeSpeedLimitKbps);
-  const [freeQueueDelayInput, setFreeQueueDelayInput] = useState<number>(DEFAULT_SPEED_SETTINGS.freeQueueDelaySeconds);
-  const [premiumSpeedInput, setPremiumSpeedInput] = useState<number>(DEFAULT_SPEED_SETTINGS.premiumSpeedLimitKbps);
-  const [premiumFragmentsInput, setPremiumFragmentsInput] = useState<number>(DEFAULT_SPEED_SETTINGS.premiumConcurrentFragments);
-  const [plusSpeedInput, setPlusSpeedInput] = useState<number>(DEFAULT_SPEED_SETTINGS.premiumPlusSpeedLimitKbps);
-  const [plusFragmentsInput, setPlusFragmentsInput] = useState<number>(DEFAULT_SPEED_SETTINGS.premiumPlusConcurrentFragments);
+  const [freeSpeedInput, setFreeSpeedInput] = useState<string>(String(DEFAULT_SPEED_SETTINGS.freeSpeedLimitKbps));
+  const [freeQueueDelayInput, setFreeQueueDelayInput] = useState<string>(String(DEFAULT_SPEED_SETTINGS.freeQueueDelaySeconds));
+  const [premiumSpeedInput, setPremiumSpeedInput] = useState<string>(String(DEFAULT_SPEED_SETTINGS.premiumSpeedLimitKbps));
+  const [premiumFragmentsInput, setPremiumFragmentsInput] = useState<string>(String(DEFAULT_SPEED_SETTINGS.premiumConcurrentFragments));
+  const [plusSpeedInput, setPlusSpeedInput] = useState<string>(String(DEFAULT_SPEED_SETTINGS.premiumPlusSpeedLimitKbps));
+  const [plusFragmentsInput, setPlusFragmentsInput] = useState<string>(String(DEFAULT_SPEED_SETTINGS.premiumPlusConcurrentFragments));
+  const [isSpeedDirty, setIsSpeedDirty] = useState(false);
   const [isSavingSpeed, setIsSavingSpeed] = useState(false);
   const [speedSavedToast, setSpeedSavedToast] = useState(false);
+
+  // Cookie Upload Modal State
+  const [cookieModalOpen, setCookieModalOpen] = useState(false);
+  const [cookieInputText, setCookieInputText] = useState('');
+  const [isSavingCookies, setIsSavingCookies] = useState(false);
 
   // Clean Temp Storage State
   const [isCleaning, setIsCleaning] = useState(false);
@@ -154,7 +161,7 @@ export function AdminPage() {
   const [premiumModalOpen, setPremiumModalOpen] = useState(false);
   const [selectedPlanTier, setSelectedPlanTier] = useState<UserPlan>('premium');
   const [selectedDuration, setSelectedDuration] = useState<string>('1_month');
-  const [customDays, setCustomDays] = useState<number>(30);
+  const [customDays, setCustomDays] = useState<string>('30');
   const [actionLoading, setActionLoading] = useState(false);
 
   // New User Modal State
@@ -195,21 +202,55 @@ export function AdminPage() {
     }
   };
 
+  // Helper to merge user lists without losing any user
+  const mergeUserLists = (current: User[], incoming: User[]): User[] => {
+    const map = new Map<string, User>();
+    for (const u of current) {
+      if (u && u.id) map.set(u.id, u);
+    }
+    for (const u of incoming) {
+      if (u && u.id) {
+        const existing = map.get(u.id);
+        if (!existing) {
+          map.set(u.id, u);
+        } else {
+          map.set(u.id, {
+            ...existing,
+            ...u,
+            plan: u.plan || existing.plan,
+            role: u.role || existing.role,
+            premiumActive: u.premiumActive !== undefined ? u.premiumActive : existing.premiumActive,
+            premiumExpiresAt: u.premiumExpiresAt !== undefined ? u.premiumExpiresAt : existing.premiumExpiresAt,
+          });
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  };
+
   // Fetch backend statistics, system diagnostics, and cookie information
   const fetchBackendData = async () => {
     try {
       setIsRefreshing(true);
-      const [dRes, diagRes, cookieRes, pRes, sRes] = await Promise.allSettled([
+      const [dRes, diagRes, cookieRes, pRes, sRes, uRes] = await Promise.allSettled([
         authFetch('/api/admin/dashboard'),
         authFetch('/api/system/diagnostic'),
         authFetch('/api/admin/cookies'),
         authFetch('/api/pricing-settings'),
         authFetch('/api/admin/speed-settings'),
+        authFetch('/api/admin/users'),
       ]);
 
       if (dRes.status === 'fulfilled') {
         const dData = await safeParseJson(dRes.value);
         if (dData && dData.success) setDashboardData(dData.data);
+      }
+
+      if (uRes.status === 'fulfilled') {
+        const uData = await safeParseJson(uRes.value);
+        if (uData && uData.success && Array.isArray(uData.data)) {
+          setUsers((prev) => mergeUserLists(prev, uData.data));
+        }
       }
 
       if (diagRes.status === 'fulfilled') {
@@ -226,18 +267,20 @@ export function AdminPage() {
         const pData = await safeParseJson(pRes.value);
         if (pData && pData.success && pData.data) {
           setPricing(pData.data);
-          const pm = pData.data.premiumMonthly || 69;
-          const pd = pData.data.premiumDiscountPercent || 30;
-          const ppm = pData.data.premiumPlusMonthly || 119;
-          const ppd = pData.data.premiumPlusDiscountPercent || 25;
+          if (!isPricingDirty) {
+            const pm = pData.data.premiumMonthly ?? 69;
+            const pd = pData.data.premiumDiscountPercent ?? 30;
+            const ppm = pData.data.premiumPlusMonthly ?? 119;
+            const ppd = pData.data.premiumPlusDiscountPercent ?? 25;
 
-          setPremiumMonthlyInput(pm);
-          setPremiumDiscountInput(pd);
-          setPremiumYearlyInput(Math.round(pm * (1 - pd / 100)) * 12);
+            setPremiumMonthlyInput(String(pm));
+            setPremiumDiscountInput(String(pd));
+            setPremiumYearlyInput(String(Math.round(pm * (1 - pd / 100)) * 12));
 
-          setPlusMonthlyInput(ppm);
-          setPlusDiscountInput(ppd);
-          setPlusYearlyInput(Math.round(ppm * (1 - ppd / 100)) * 12);
+            setPlusMonthlyInput(String(ppm));
+            setPlusDiscountInput(String(ppd));
+            setPlusYearlyInput(String(Math.round(ppm * (1 - ppd / 100)) * 12));
+          }
         }
       }
 
@@ -245,12 +288,14 @@ export function AdminPage() {
         const sData = await safeParseJson(sRes.value);
         if (sData && sData.success && sData.data) {
           setSpeedSettings(sData.data);
-          setFreeSpeedInput(sData.data.freeSpeedLimitKbps);
-          setFreeQueueDelayInput(sData.data.freeQueueDelaySeconds);
-          setPremiumSpeedInput(sData.data.premiumSpeedLimitKbps);
-          setPremiumFragmentsInput(sData.data.premiumConcurrentFragments);
-          setPlusSpeedInput(sData.data.premiumPlusSpeedLimitKbps);
-          setPlusFragmentsInput(sData.data.premiumPlusConcurrentFragments);
+          if (!isSpeedDirty) {
+            setFreeSpeedInput(String(sData.data.freeSpeedLimitKbps ?? 0));
+            setFreeQueueDelayInput(String(sData.data.freeQueueDelaySeconds ?? 0));
+            setPremiumSpeedInput(String(sData.data.premiumSpeedLimitKbps ?? 0));
+            setPremiumFragmentsInput(String(sData.data.premiumConcurrentFragments ?? 4));
+            setPlusSpeedInput(String(sData.data.premiumPlusSpeedLimitKbps ?? 0));
+            setPlusFragmentsInput(String(sData.data.premiumPlusConcurrentFragments ?? 8));
+          }
         }
       }
     } catch (err) {
@@ -268,7 +313,7 @@ export function AdminPage() {
     setIsLoading(true);
     const unsubscribeUsers = subscribeToAllUsers(
       (liveUsers) => {
-        setUsers(liveUsers);
+        setUsers((prev) => mergeUserLists(prev, liveUsers));
         setIsLiveConnected(true);
         setIsLoading(false);
       },
@@ -281,28 +326,32 @@ export function AdminPage() {
 
     const unsubscribePricing = subscribeToPricingSettings((livePricing) => {
       setPricing(livePricing);
-      const pm = livePricing.premiumMonthly || 69;
-      const pd = livePricing.premiumDiscountPercent || 30;
-      const ppm = livePricing.premiumPlusMonthly || 119;
-      const ppd = livePricing.premiumPlusDiscountPercent || 25;
+      if (!isPricingDirty) {
+        const pm = livePricing.premiumMonthly ?? 69;
+        const pd = livePricing.premiumDiscountPercent ?? 30;
+        const ppm = livePricing.premiumPlusMonthly ?? 119;
+        const ppd = livePricing.premiumPlusDiscountPercent ?? 25;
 
-      setPremiumMonthlyInput(pm);
-      setPremiumDiscountInput(pd);
-      setPremiumYearlyInput(Math.round(pm * (1 - pd / 100)) * 12);
+        setPremiumMonthlyInput(String(pm));
+        setPremiumDiscountInput(String(pd));
+        setPremiumYearlyInput(String(Math.round(pm * (1 - pd / 100)) * 12));
 
-      setPlusMonthlyInput(ppm);
-      setPlusDiscountInput(ppd);
-      setPlusYearlyInput(Math.round(ppm * (1 - ppd / 100)) * 12);
+        setPlusMonthlyInput(String(ppm));
+        setPlusDiscountInput(String(ppd));
+        setPlusYearlyInput(String(Math.round(ppm * (1 - ppd / 100)) * 12));
+      }
     });
 
     const unsubscribeSpeed = subscribeToSpeedSettings((liveSpeeds) => {
       setSpeedSettings(liveSpeeds);
-      setFreeSpeedInput(liveSpeeds.freeSpeedLimitKbps);
-      setFreeQueueDelayInput(liveSpeeds.freeQueueDelaySeconds);
-      setPremiumSpeedInput(liveSpeeds.premiumSpeedLimitKbps);
-      setPremiumFragmentsInput(liveSpeeds.premiumConcurrentFragments);
-      setPlusSpeedInput(liveSpeeds.premiumPlusSpeedLimitKbps);
-      setPlusFragmentsInput(liveSpeeds.premiumPlusConcurrentFragments);
+      if (!isSpeedDirty) {
+        setFreeSpeedInput(String(liveSpeeds.freeSpeedLimitKbps ?? 0));
+        setFreeQueueDelayInput(String(liveSpeeds.freeQueueDelaySeconds ?? 0));
+        setPremiumSpeedInput(String(liveSpeeds.premiumSpeedLimitKbps ?? 0));
+        setPremiumFragmentsInput(String(liveSpeeds.premiumConcurrentFragments ?? 4));
+        setPlusSpeedInput(String(liveSpeeds.premiumPlusSpeedLimitKbps ?? 0));
+        setPlusFragmentsInput(String(liveSpeeds.premiumPlusConcurrentFragments ?? 8));
+      }
     });
 
     fetchBackendData();
@@ -322,66 +371,99 @@ export function AdminPage() {
 
   // Derived Pricing Calculations & Sync Helpers
   // When monthly changes, auto calculate yearly and per-month rate
-  const handlePremiumMonthlyChange = (val: number) => {
-    const safeVal = Math.max(1, val);
-    setPremiumMonthlyInput(safeVal);
-    const yearly = Math.round(safeVal * (1 - premiumDiscountInput / 100)) * 12;
-    setPremiumYearlyInput(yearly);
-  };
-
-  const handlePremiumDiscountChange = (val: number) => {
-    const safeVal = Math.min(90, Math.max(0, val));
-    setPremiumDiscountInput(safeVal);
-    const yearly = Math.round(premiumMonthlyInput * (1 - safeVal / 100)) * 12;
-    setPremiumYearlyInput(yearly);
-  };
-
-  const handlePremiumYearlyChange = (val: number) => {
-    const safeVal = Math.max(1, val);
-    setPremiumYearlyInput(safeVal);
-    // Reverse calculate discount percent if monthly is known
-    if (premiumMonthlyInput > 0) {
-      const fullYearCost = premiumMonthlyInput * 12;
-      const diff = fullYearCost - safeVal;
-      const calculatedDiscount = Math.min(90, Math.max(0, Math.round((diff / fullYearCost) * 100)));
-      setPremiumDiscountInput(calculatedDiscount);
+  const handlePremiumMonthlyChange = (valStr: string) => {
+    setIsPricingDirty(true);
+    setPremiumMonthlyInput(valStr);
+    const num = parseFloat(valStr);
+    if (!isNaN(num) && num > 0) {
+      const discount = parseFloat(premiumDiscountInput) || 0;
+      const yearly = Math.round(num * (1 - discount / 100)) * 12;
+      setPremiumYearlyInput(String(yearly));
     }
   };
 
-  const handlePlusMonthlyChange = (val: number) => {
-    const safeVal = Math.max(1, val);
-    setPlusMonthlyInput(safeVal);
-    const yearly = Math.round(safeVal * (1 - plusDiscountInput / 100)) * 12;
-    setPlusYearlyInput(yearly);
-  };
-
-  const handlePlusDiscountChange = (val: number) => {
-    const safeVal = Math.min(90, Math.max(0, val));
-    setPlusDiscountInput(safeVal);
-    const yearly = Math.round(plusMonthlyInput * (1 - safeVal / 100)) * 12;
-    setPlusYearlyInput(yearly);
-  };
-
-  const handlePlusYearlyChange = (val: number) => {
-    const safeVal = Math.max(1, val);
-    setPlusYearlyInput(safeVal);
-    if (plusMonthlyInput > 0) {
-      const fullYearCost = plusMonthlyInput * 12;
-      const diff = fullYearCost - safeVal;
-      const calculatedDiscount = Math.min(90, Math.max(0, Math.round((diff / fullYearCost) * 100)));
-      setPlusDiscountInput(calculatedDiscount);
+  const handlePremiumDiscountChange = (valStr: string) => {
+    setIsPricingDirty(true);
+    setPremiumDiscountInput(valStr);
+    const disc = parseFloat(valStr);
+    const monthly = parseFloat(premiumMonthlyInput) || 0;
+    if (!isNaN(disc) && monthly > 0) {
+      const safeDisc = Math.min(90, Math.max(0, disc));
+      const yearly = Math.round(monthly * (1 - safeDisc / 100)) * 12;
+      setPremiumYearlyInput(String(yearly));
     }
   };
 
-  const calculatedPremiumYearlyPerMonth = Math.round(
-    premiumMonthlyInput * (1 - premiumDiscountInput / 100)
-  );
-  const calculatedPremiumYearlyTotal = premiumYearlyInput || (calculatedPremiumYearlyPerMonth * 12);
+  const handlePremiumYearlyChange = (valStr: string) => {
+    setIsPricingDirty(true);
+    setPremiumYearlyInput(valStr);
+    const yearly = parseFloat(valStr);
+    const monthly = parseFloat(premiumMonthlyInput) || 0;
+    if (!isNaN(yearly) && monthly > 0) {
+      const fullYearCost = monthly * 12;
+      const diff = fullYearCost - yearly;
+      const calculatedDiscount = Math.min(90, Math.max(0, Math.round((diff / fullYearCost) * 100)));
+      setPremiumDiscountInput(String(calculatedDiscount));
+    }
+  };
 
-  const calculatedPlusYearlyPerMonth = Math.round(
-    plusMonthlyInput * (1 - plusDiscountInput / 100)
-  );
-  const calculatedPlusYearlyTotal = plusYearlyInput || (calculatedPlusYearlyPerMonth * 12);
+  const handlePlusMonthlyChange = (valStr: string) => {
+    setIsPricingDirty(true);
+    setPlusMonthlyInput(valStr);
+    const num = parseFloat(valStr);
+    if (!isNaN(num) && num > 0) {
+      const discount = parseFloat(plusDiscountInput) || 0;
+      const yearly = Math.round(num * (1 - discount / 100)) * 12;
+      setPlusYearlyInput(String(yearly));
+    }
+  };
+
+  const handlePlusDiscountChange = (valStr: string) => {
+    setIsPricingDirty(true);
+    setPlusDiscountInput(valStr);
+    const disc = parseFloat(valStr);
+    const monthly = parseFloat(plusMonthlyInput) || 0;
+    if (!isNaN(disc) && monthly > 0) {
+      const safeDisc = Math.min(90, Math.max(0, disc));
+      const yearly = Math.round(monthly * (1 - safeDisc / 100)) * 12;
+      setPlusYearlyInput(String(yearly));
+    }
+  };
+
+  const handlePlusYearlyChange = (valStr: string) => {
+    setIsPricingDirty(true);
+    setPlusYearlyInput(valStr);
+    const yearly = parseFloat(valStr);
+    const monthly = parseFloat(plusMonthlyInput) || 0;
+    if (!isNaN(yearly) && monthly > 0) {
+      const fullYearCost = monthly * 12;
+      const diff = fullYearCost - yearly;
+      const calculatedDiscount = Math.min(90, Math.max(0, Math.round((diff / fullYearCost) * 100)));
+      setPlusDiscountInput(String(calculatedDiscount));
+    }
+  };
+
+  const numPremMonthly = parseFloat(premiumMonthlyInput) || 0;
+  const numPremDiscount = parseFloat(premiumDiscountInput) || 0;
+  const numPremYearly = parseFloat(premiumYearlyInput) || 0;
+
+  const calculatedPremiumYearlyPerMonth = numPremMonthly > 0
+    ? Math.round(numPremMonthly * (1 - numPremDiscount / 100))
+    : 0;
+  const calculatedPremiumYearlyTotal = numPremYearly > 0
+    ? numPremYearly
+    : (calculatedPremiumYearlyPerMonth * 12);
+
+  const numPlusMonthly = parseFloat(plusMonthlyInput) || 0;
+  const numPlusDiscount = parseFloat(plusDiscountInput) || 0;
+  const numPlusYearly = parseFloat(plusYearlyInput) || 0;
+
+  const calculatedPlusYearlyPerMonth = numPlusMonthly > 0
+    ? Math.round(numPlusMonthly * (1 - numPlusDiscount / 100))
+    : 0;
+  const calculatedPlusYearlyTotal = numPlusYearly > 0
+    ? numPlusYearly
+    : (calculatedPlusYearlyPerMonth * 12);
 
   // Real Statistics Calculations from live users & dashboard data
   const totalUsersCount = users.length;
@@ -481,11 +563,16 @@ export function AdminPage() {
   const handleSavePricing = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setIsSavingPricing(true);
+    const pMonthly = Math.max(1, Number(premiumMonthlyInput) || 69);
+    const pDisc = Math.max(0, Math.min(90, Number(premiumDiscountInput) || 0));
+    const plusM = Math.max(1, Number(plusMonthlyInput) || 119);
+    const plusDisc = Math.max(0, Math.min(90, Number(plusDiscountInput) || 0));
+
     const pricingPayload = {
-      premiumMonthly: Number(premiumMonthlyInput) || 69,
-      premiumDiscountPercent: Number(premiumDiscountInput) || 30,
-      premiumPlusMonthly: Number(plusMonthlyInput) || 119,
-      premiumPlusDiscountPercent: Number(plusDiscountInput) || 25,
+      premiumMonthly: pMonthly,
+      premiumDiscountPercent: pDisc,
+      premiumPlusMonthly: plusM,
+      premiumPlusDiscountPercent: plusDisc,
     };
 
     try {
@@ -502,6 +589,7 @@ export function AdminPage() {
       await Promise.allSettled([backendPromise, firestorePromise]);
 
       setPricing(pricingPayload);
+      setIsPricingDirty(false);
       setPricingSavedToast(true);
       triggerSuccessNotification(
         'Fiyat Ayarları Kaydedildi',
@@ -522,12 +610,12 @@ export function AdminPage() {
     if (e) e.preventDefault();
     setIsSavingSpeed(true);
     const speedPayload = {
-      freeSpeedLimitKbps: Number(freeSpeedInput) || 0,
-      freeQueueDelaySeconds: Number(freeQueueDelayInput) || 0,
-      premiumSpeedLimitKbps: Number(premiumSpeedInput) || 0,
-      premiumConcurrentFragments: Number(premiumFragmentsInput) || 4,
-      premiumPlusSpeedLimitKbps: Number(plusSpeedInput) || 0,
-      premiumPlusConcurrentFragments: Number(plusFragmentsInput) || 8,
+      freeSpeedLimitKbps: Math.max(0, Number(freeSpeedInput) || 0),
+      freeQueueDelaySeconds: Math.max(0, Number(freeQueueDelayInput) || 0),
+      premiumSpeedLimitKbps: Math.max(0, Number(premiumSpeedInput) || 0),
+      premiumConcurrentFragments: Math.max(1, Math.min(16, Number(premiumFragmentsInput) || 4)),
+      premiumPlusSpeedLimitKbps: Math.max(0, Number(plusSpeedInput) || 0),
+      premiumPlusConcurrentFragments: Math.max(1, Math.min(32, Number(plusFragmentsInput) || 8)),
     };
 
     try {
@@ -544,6 +632,7 @@ export function AdminPage() {
       await Promise.allSettled([backendPromise, firestorePromise]);
 
       setSpeedSettings(speedPayload);
+      setIsSpeedDirty(false);
       setSpeedSavedToast(true);
       triggerSuccessNotification(
         'Hız Ayarları Kaydedildi',
@@ -563,20 +652,25 @@ export function AdminPage() {
   const handleSaveAllSettings = async () => {
     setIsSavingAll(true);
     try {
+      const pMonthly = Math.max(1, Number(premiumMonthlyInput) || 69);
+      const pDisc = Math.max(0, Math.min(90, Number(premiumDiscountInput) || 0));
+      const plusM = Math.max(1, Number(plusMonthlyInput) || 119);
+      const plusDisc = Math.max(0, Math.min(90, Number(plusDiscountInput) || 0));
+
       const pricingPayload = {
-        premiumMonthly: Number(premiumMonthlyInput) || 69,
-        premiumDiscountPercent: Number(premiumDiscountInput) || 30,
-        premiumPlusMonthly: Number(plusMonthlyInput) || 119,
-        premiumPlusDiscountPercent: Number(plusDiscountInput) || 25,
+        premiumMonthly: pMonthly,
+        premiumDiscountPercent: pDisc,
+        premiumPlusMonthly: plusM,
+        premiumPlusDiscountPercent: plusDisc,
       };
 
       const speedPayload = {
-        freeSpeedLimitKbps: Number(freeSpeedInput) || 0,
-        freeQueueDelaySeconds: Number(freeQueueDelayInput) || 0,
-        premiumSpeedLimitKbps: Number(premiumSpeedInput) || 0,
-        premiumConcurrentFragments: Number(premiumFragmentsInput) || 4,
-        premiumPlusSpeedLimitKbps: Number(plusSpeedInput) || 0,
-        premiumPlusConcurrentFragments: Number(plusFragmentsInput) || 8,
+        freeSpeedLimitKbps: Math.max(0, Number(freeSpeedInput) || 0),
+        freeQueueDelaySeconds: Math.max(0, Number(freeQueueDelayInput) || 0),
+        premiumSpeedLimitKbps: Math.max(0, Number(premiumSpeedInput) || 0),
+        premiumConcurrentFragments: Math.max(1, Math.min(16, Number(premiumFragmentsInput) || 4)),
+        premiumPlusSpeedLimitKbps: Math.max(0, Number(plusSpeedInput) || 0),
+        premiumPlusConcurrentFragments: Math.max(1, Math.min(32, Number(plusFragmentsInput) || 8)),
       };
 
       const pBackend = authFetch('/api/admin/pricing-settings', {
@@ -603,6 +697,8 @@ export function AdminPage() {
 
       setPricing(pricingPayload);
       setSpeedSettings(speedPayload);
+      setIsPricingDirty(false);
+      setIsSpeedDirty(false);
       setPricingSavedToast(true);
       setSpeedSavedToast(true);
       triggerSuccessNotification(
@@ -618,6 +714,33 @@ export function AdminPage() {
       console.error('Tüm ayarları kaydetme hatası:', err);
     } finally {
       setIsSavingAll(false);
+    }
+  };
+
+  // Handle Save YouTube Cookies
+  const handleSaveCookies = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!cookieInputText.trim()) return;
+    setIsSavingCookies(true);
+    try {
+      const res = await authFetch('/api/admin/cookies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookies: cookieInputText }),
+      });
+      const data = await safeParseJson(res);
+      if (data && data.success) {
+        triggerSuccessNotification('Cookies Kaydedildi', data.message || 'YouTube cookie dosyası başarıyla yüklendi.');
+        setCookieModalOpen(false);
+        setCookieInputText('');
+        fetchBackendData();
+      } else {
+        alert(data?.error || 'Cookie kaydedilemedi.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Cookie kaydedilirken bağlantı hatası oluştu.');
+    } finally {
+      setIsSavingCookies(false);
     }
   };
 
@@ -649,12 +772,13 @@ export function AdminPage() {
       let years: number | undefined;
       let days: number | undefined;
 
+      const parsedCustomDays = Math.max(1, parseInt(customDays, 10) || 30);
       if (selectedDuration === '1_month') months = 1;
       else if (selectedDuration === '3_months') months = 3;
       else if (selectedDuration === '6_months') months = 6;
       else if (selectedDuration === '1_year') years = 1;
       else if (selectedDuration === '2_years') years = 2;
-      else if (selectedDuration === 'custom') days = customDays;
+      else if (selectedDuration === 'custom') days = parsedCustomDays;
 
       await adminSetPremium(selectedUser.id, {
         plan: selectedPlanTier,
@@ -673,7 +797,7 @@ export function AdminPage() {
           else if (selectedDuration === '6_months') addedMs = 180 * 24 * 60 * 60 * 1000;
           else if (selectedDuration === '1_year') addedMs = 365 * 24 * 60 * 60 * 1000;
           else if (selectedDuration === '2_years') addedMs = 730 * 24 * 60 * 60 * 1000;
-          else if (selectedDuration === 'custom') addedMs = customDays * 24 * 60 * 60 * 1000;
+          else if (selectedDuration === 'custom') addedMs = parsedCustomDays * 24 * 60 * 60 * 1000;
 
           const now = Date.now();
           const base = u.premiumExpiresAt && u.premiumExpiresAt > now ? u.premiumExpiresAt : now;
@@ -1769,12 +1893,17 @@ export function AdminPage() {
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₺</span>
                         <input
-                          type="number"
-                          min={1}
-                          max={9999}
+                          type="text"
+                          inputMode="numeric"
                           value={premiumMonthlyInput}
-                          onChange={(e) => handlePremiumMonthlyChange(parseInt(e.target.value, 10) || 0)}
+                          onChange={(e) => handlePremiumMonthlyChange(e.target.value)}
+                          onBlur={() => {
+                            if (!premiumMonthlyInput.trim() || isNaN(Number(premiumMonthlyInput))) {
+                              setPremiumMonthlyInput('69');
+                            }
+                          }}
                           className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                          placeholder="69"
                           required
                         />
                       </div>
@@ -1784,12 +1913,17 @@ export function AdminPage() {
                       <label className="text-[11px] font-semibold text-slate-300">Yıllık İndirim (%)</label>
                       <div className="relative">
                         <input
-                          type="number"
-                          min={0}
-                          max={90}
+                          type="text"
+                          inputMode="numeric"
                           value={premiumDiscountInput}
-                          onChange={(e) => handlePremiumDiscountChange(parseInt(e.target.value, 10) || 0)}
+                          onChange={(e) => handlePremiumDiscountChange(e.target.value)}
+                          onBlur={() => {
+                            if (!premiumDiscountInput.trim() || isNaN(Number(premiumDiscountInput))) {
+                              setPremiumDiscountInput('30');
+                            }
+                          }}
                           className="w-full pl-3 pr-7 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                          placeholder="30"
                           required
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">%</span>
@@ -1803,12 +1937,19 @@ export function AdminPage() {
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₺</span>
                       <input
-                        type="number"
-                        min={1}
-                        max={99999}
-                        value={calculatedPremiumYearlyTotal}
-                        onChange={(e) => handlePremiumYearlyChange(parseInt(e.target.value, 10) || 0)}
+                        type="text"
+                        inputMode="numeric"
+                        value={premiumYearlyInput}
+                        onChange={(e) => handlePremiumYearlyChange(e.target.value)}
+                        onBlur={() => {
+                          if (!premiumYearlyInput.trim() || isNaN(Number(premiumYearlyInput))) {
+                            const pm = parseFloat(premiumMonthlyInput) || 69;
+                            const pd = parseFloat(premiumDiscountInput) || 30;
+                            setPremiumYearlyInput(String(Math.round(pm * (1 - pd / 100)) * 12));
+                          }
+                        }}
                         className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-amber-400/30 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                        placeholder="588"
                       />
                     </div>
                   </div>
@@ -1843,12 +1984,17 @@ export function AdminPage() {
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₺</span>
                         <input
-                          type="number"
-                          min={1}
-                          max={9999}
+                          type="text"
+                          inputMode="numeric"
                           value={plusMonthlyInput}
-                          onChange={(e) => handlePlusMonthlyChange(parseInt(e.target.value, 10) || 0)}
+                          onChange={(e) => handlePlusMonthlyChange(e.target.value)}
+                          onBlur={() => {
+                            if (!plusMonthlyInput.trim() || isNaN(Number(plusMonthlyInput))) {
+                              setPlusMonthlyInput('119');
+                            }
+                          }}
                           className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-purple-400"
+                          placeholder="119"
                           required
                         />
                       </div>
@@ -1858,12 +2004,17 @@ export function AdminPage() {
                       <label className="text-[11px] font-semibold text-slate-300">Yıllık İndirim (%)</label>
                       <div className="relative">
                         <input
-                          type="number"
-                          min={0}
-                          max={90}
+                          type="text"
+                          inputMode="numeric"
                           value={plusDiscountInput}
-                          onChange={(e) => handlePlusDiscountChange(parseInt(e.target.value, 10) || 0)}
+                          onChange={(e) => handlePlusDiscountChange(e.target.value)}
+                          onBlur={() => {
+                            if (!plusDiscountInput.trim() || isNaN(Number(plusDiscountInput))) {
+                              setPlusDiscountInput('25');
+                            }
+                          }}
                           className="w-full pl-3 pr-7 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-purple-400"
+                          placeholder="25"
                           required
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">%</span>
@@ -1877,12 +2028,19 @@ export function AdminPage() {
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₺</span>
                       <input
-                        type="number"
-                        min={1}
-                        max={99999}
-                        value={calculatedPlusYearlyTotal}
-                        onChange={(e) => handlePlusYearlyChange(parseInt(e.target.value, 10) || 0)}
+                        type="text"
+                        inputMode="numeric"
+                        value={plusYearlyInput}
+                        onChange={(e) => handlePlusYearlyChange(e.target.value)}
+                        onBlur={() => {
+                          if (!plusYearlyInput.trim() || isNaN(Number(plusYearlyInput))) {
+                            const ppm = parseFloat(plusMonthlyInput) || 119;
+                            const ppd = parseFloat(plusDiscountInput) || 25;
+                            setPlusYearlyInput(String(Math.round(ppm * (1 - ppd / 100)) * 12));
+                          }
+                        }}
                         className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#12151f] border border-purple-500/30 text-xs font-mono font-bold text-purple-300 focus:outline-none focus:border-purple-400"
+                        placeholder="1068"
                       />
                     </div>
                   </div>
@@ -1947,42 +2105,45 @@ export function AdminPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setFreeSpeedInput(0);
-                  setFreeQueueDelayInput(0);
-                  setPremiumSpeedInput(0);
-                  setPremiumFragmentsInput(6);
-                  setPlusSpeedInput(0);
-                  setPlusFragmentsInput(12);
+                  setIsSpeedDirty(true);
+                  setFreeSpeedInput('0');
+                  setFreeQueueDelayInput('0');
+                  setPremiumSpeedInput('0');
+                  setPremiumFragmentsInput('6');
+                  setPlusSpeedInput('0');
+                  setPlusFragmentsInput('12');
                 }}
-                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium border border-emerald-500/20"
+                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium border border-emerald-500/20 cursor-pointer"
               >
                 ⚡ Herkese Maksimum Hız (0s Kuyruk)
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  setFreeSpeedInput(3500);
-                  setFreeQueueDelayInput(1);
-                  setPremiumSpeedInput(0);
-                  setPremiumFragmentsInput(4);
-                  setPlusSpeedInput(0);
-                  setPlusFragmentsInput(8);
+                  setIsSpeedDirty(true);
+                  setFreeSpeedInput('3500');
+                  setFreeQueueDelayInput('1');
+                  setPremiumSpeedInput('0');
+                  setPremiumFragmentsInput('4');
+                  setPlusSpeedInput('0');
+                  setPlusFragmentsInput('8');
                 }}
-                className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-medium border border-cyan-500/20"
+                className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-medium border border-cyan-500/20 cursor-pointer"
               >
                 ⚖️ Dengeli Hızlı Mod (3.5 MB/s, 1s Kuyruk)
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  setFreeSpeedInput(1500);
-                  setFreeQueueDelayInput(3);
-                  setPremiumSpeedInput(0);
-                  setPremiumFragmentsInput(4);
-                  setPlusSpeedInput(0);
-                  setPlusFragmentsInput(10);
+                  setIsSpeedDirty(true);
+                  setFreeSpeedInput('1500');
+                  setFreeQueueDelayInput('3');
+                  setPremiumSpeedInput('0');
+                  setPremiumFragmentsInput('4');
+                  setPlusSpeedInput('0');
+                  setPlusFragmentsInput('10');
                 }}
-                className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-medium border border-amber-500/20"
+                className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-medium border border-amber-500/20 cursor-pointer"
               >
                 👑 Premium Teşvik Modu (1.5 MB/s, 3s Kuyruk)
               </button>
@@ -1997,23 +2158,39 @@ export function AdminPage() {
                     <div>
                       <label className="text-[11px] text-slate-400">Hız Limiti (KB/s - 0=Sınırsız)</label>
                       <input
-                        type="number"
-                        min={0}
-                        max={50000}
+                        type="text"
+                        inputMode="numeric"
                         value={freeSpeedInput}
-                        onChange={(e) => setFreeSpeedInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white"
+                        onChange={(e) => {
+                          setIsSpeedDirty(true);
+                          setFreeSpeedInput(e.target.value);
+                        }}
+                        onBlur={() => {
+                          if (!freeSpeedInput.trim() || isNaN(Number(freeSpeedInput))) {
+                            setFreeSpeedInput('0');
+                          }
+                        }}
+                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
+                        placeholder="0"
                       />
                     </div>
                     <div>
                       <label className="text-[11px] text-slate-400">Kuyruk Bekleme Süresi (Saniye)</label>
                       <input
-                        type="number"
-                        min={0}
-                        max={60}
+                        type="text"
+                        inputMode="numeric"
                         value={freeQueueDelayInput}
-                        onChange={(e) => setFreeQueueDelayInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white"
+                        onChange={(e) => {
+                          setIsSpeedDirty(true);
+                          setFreeQueueDelayInput(e.target.value);
+                        }}
+                        onBlur={() => {
+                          if (!freeQueueDelayInput.trim() || isNaN(Number(freeQueueDelayInput))) {
+                            setFreeQueueDelayInput('0');
+                          }
+                        }}
+                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
+                        placeholder="0"
                       />
                     </div>
                   </div>
@@ -2026,23 +2203,39 @@ export function AdminPage() {
                     <div>
                       <label className="text-[11px] text-slate-400">Hız Limiti (KB/s - 0=Maksimum)</label>
                       <input
-                        type="number"
-                        min={0}
-                        max={100000}
+                        type="text"
+                        inputMode="numeric"
                         value={premiumSpeedInput}
-                        onChange={(e) => setPremiumSpeedInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white"
+                        onChange={(e) => {
+                          setIsSpeedDirty(true);
+                          setPremiumSpeedInput(e.target.value);
+                        }}
+                        onBlur={() => {
+                          if (!premiumSpeedInput.trim() || isNaN(Number(premiumSpeedInput))) {
+                            setPremiumSpeedInput('0');
+                          }
+                        }}
+                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                        placeholder="0"
                       />
                     </div>
                     <div>
                       <label className="text-[11px] text-slate-400">Eşzamanlı Parça (Fragments)</label>
                       <input
-                        type="number"
-                        min={1}
-                        max={16}
+                        type="text"
+                        inputMode="numeric"
                         value={premiumFragmentsInput}
-                        onChange={(e) => setPremiumFragmentsInput(Math.max(1, Math.min(16, parseInt(e.target.value, 10) || 1)))}
-                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white"
+                        onChange={(e) => {
+                          setIsSpeedDirty(true);
+                          setPremiumFragmentsInput(e.target.value);
+                        }}
+                        onBlur={() => {
+                          if (!premiumFragmentsInput.trim() || isNaN(Number(premiumFragmentsInput))) {
+                            setPremiumFragmentsInput('4');
+                          }
+                        }}
+                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                        placeholder="4"
                       />
                     </div>
                   </div>
@@ -2055,23 +2248,39 @@ export function AdminPage() {
                     <div>
                       <label className="text-[11px] text-slate-400">Hız Limiti (KB/s - 0=Ultra Turbo)</label>
                       <input
-                        type="number"
-                        min={0}
-                        max={100000}
+                        type="text"
+                        inputMode="numeric"
                         value={plusSpeedInput}
-                        onChange={(e) => setPlusSpeedInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white"
+                        onChange={(e) => {
+                          setIsSpeedDirty(true);
+                          setPlusSpeedInput(e.target.value);
+                        }}
+                        onBlur={() => {
+                          if (!plusSpeedInput.trim() || isNaN(Number(plusSpeedInput))) {
+                            setPlusSpeedInput('0');
+                          }
+                        }}
+                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-purple-400"
+                        placeholder="0"
                       />
                     </div>
                     <div>
                       <label className="text-[11px] text-slate-400">Eşzamanlı Parça (Fragments)</label>
                       <input
-                        type="number"
-                        min={1}
-                        max={32}
+                        type="text"
+                        inputMode="numeric"
                         value={plusFragmentsInput}
-                        onChange={(e) => setPlusFragmentsInput(Math.max(1, Math.min(32, parseInt(e.target.value, 10) || 1)))}
-                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white"
+                        onChange={(e) => {
+                          setIsSpeedDirty(true);
+                          setPlusFragmentsInput(e.target.value);
+                        }}
+                        onBlur={() => {
+                          if (!plusFragmentsInput.trim() || isNaN(Number(plusFragmentsInput))) {
+                            setPlusFragmentsInput('8');
+                          }
+                        }}
+                        className="w-full px-3 py-1.5 rounded bg-[#12151f] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-purple-400"
+                        placeholder="8"
                       />
                     </div>
                   </div>
@@ -2209,7 +2418,78 @@ export function AdminPage() {
                 <div>Dosya: <strong className="text-white font-mono">{cookieStatus?.cookiePath || 'Yok'}</strong></div>
                 <div>Bot Koruması Aşma: <strong className="text-emerald-400 font-mono">Aktif</strong></div>
               </div>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCookieModalOpen(true)}
+                  className="w-full py-1.5 rounded-lg bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border border-amber-400/20 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Cookie className="w-3.5 h-3.5" />
+                  <span>{cookieStatus?.hasCookies ? 'Cookies Güncelle' : 'YouTube Cookies Yükle'}</span>
+                </button>
+              </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 0: YOUTUBE COOKIES MODAL */}
+      {cookieModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-lg rounded-2xl bg-[#0e111a] border border-amber-400/30 p-6 text-left space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-400/10 text-amber-400">
+                  <Cookie className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">YouTube Cookies Yükle / Güncelle</h3>
+                  <p className="text-[11px] text-slate-400">Netscape formatındaki cookies.txt içeriğini yapıştırın</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCookieModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCookies} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">Cookie Dosyası İçeriği (Netscape Format)</label>
+                <textarea
+                  rows={8}
+                  value={cookieInputText}
+                  onChange={(e) => setCookieInputText(e.target.value)}
+                  placeholder="# Netscape HTTP Cookie File&#10;.youtube.com	TRUE	/	TRUE	1740000000	LOGIN_INFO	..."
+                  className="w-full px-3 py-2 rounded-xl bg-[#07080b] border border-white/[0.1] text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-400 resize-none"
+                  required
+                />
+                <p className="text-[11px] text-slate-400">
+                  Tarayıcınızdan "Get cookies.txt LOCALLY" eklentisi ile YouTube için aldığınız cookie metnini buraya yapıştırıp kaydedin.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setCookieModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-xs text-slate-400 hover:text-white"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingCookies || !cookieInputText.trim()}
+                  className="px-5 py-2 rounded-lg bg-amber-400 text-black font-bold text-xs hover:bg-amber-300 disabled:opacity-50 transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSavingCookies ? 'Kaydediliyor...' : 'Cookies Kaydet ve Yayına Al'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -2353,12 +2633,17 @@ export function AdminPage() {
                 <div className="pt-2">
                   <label className="text-xs text-slate-400">Eklenecek Gün Sayısı:</label>
                   <input
-                    type="number"
-                    min={1}
-                    max={3650}
+                    type="text"
+                    inputMode="numeric"
                     value={customDays}
-                    onChange={(e) => setCustomDays(parseInt(e.target.value, 10) || 1)}
-                    className="w-full mt-1 px-3 py-2 rounded-lg bg-[#07080b] border border-white/[0.08] text-xs text-slate-200"
+                    onChange={(e) => setCustomDays(e.target.value)}
+                    onBlur={() => {
+                      if (!customDays.trim() || isNaN(Number(customDays))) {
+                        setCustomDays('30');
+                      }
+                    }}
+                    placeholder="30"
+                    className="w-full mt-1 px-3 py-2 rounded-lg bg-[#07080b] border border-white/[0.08] text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-400"
                   />
                 </div>
               )}

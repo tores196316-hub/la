@@ -200,9 +200,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(meData.user);
                 localStorage.setItem(USER_CACHE_KEY, JSON.stringify(meData.user));
               }
-            } else {
-              // Token is invalid/expired
-              if (isMounted) {
+            } else if (meRes.status === 401) {
+              // Only if explicitly rejected as 401 Unauthorized
+              const cached = localStorage.getItem(USER_CACHE_KEY);
+              if (!cached && isMounted) {
                 setUser(null);
                 setToken(null);
                 localStorage.removeItem(TOKEN_KEY);
@@ -210,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             }
           } catch {
-            // Offline or backend start delay, keep cached user
+            // Offline or server rebooting, keep cached user intact
           }
         } else {
           if (isMounted) {

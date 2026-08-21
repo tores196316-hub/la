@@ -51,9 +51,12 @@ export interface UserDownloadRecord {
   timestamp: number;
 }
 
-const DATA_DIR = path.resolve(process.cwd(), 'tmp', 'data');
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const LEGACY_DATA_DIR = path.resolve(process.cwd(), 'tmp', 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'user_history.json');
+const LEGACY_USERS_FILE = path.join(LEGACY_DATA_DIR, 'users.json');
+const LEGACY_HISTORY_FILE = path.join(LEGACY_DATA_DIR, 'user_history.json');
 const JWT_SECRET = process.env.JWT_SECRET || 'imgivo_production_secure_secret_key_2026';
 
 // In-memory token store for fast, revocation-ready sessions
@@ -159,6 +162,17 @@ class UserService {
         for (const u of data) {
           this.users.set(u.id, u);
         }
+        console.log(`[USER_SERVICE] ${this.users.size} kullanıcı kalıcı veritabanından yüklendi.`);
+      } else if (fs.existsSync(LEGACY_USERS_FILE)) {
+        // Migrate from legacy tmp storage to permanent data storage
+        const raw = fs.readFileSync(LEGACY_USERS_FILE, 'utf-8');
+        const data: User[] = JSON.parse(raw);
+        this.users.clear();
+        for (const u of data) {
+          this.users.set(u.id, u);
+        }
+        this.saveUsers();
+        console.log(`[USER_SERVICE] ${this.users.size} kullanıcı geçici depolamadan kalıcı depolamaya taşındı.`);
       }
     } catch (err) {
       console.error('Kullanıcı veritabanı okunamadı, boş başlatılıyor:', err);
@@ -177,14 +191,18 @@ class UserService {
 
   private loadHistory(): void {
     try {
-      if (fs.existsSync(HISTORY_FILE)) {
-        const raw = fs.readFileSync(HISTORY_FILE, 'utf-8');
+      let sourceFile = fs.existsSync(HISTORY_FILE) ? HISTORY_FILE : fs.existsSync(LEGACY_HISTORY_FILE) ? LEGACY_HISTORY_FILE : null;
+      if (sourceFile) {
+        const raw = fs.readFileSync(sourceFile, 'utf-8');
         const data: UserDownloadRecord[] = JSON.parse(raw);
         this.userHistory.clear();
         for (const item of data) {
           const list = this.userHistory.get(item.userId) || [];
           list.push(item);
           this.userHistory.set(item.userId, list);
+        }
+        if (sourceFile === LEGACY_HISTORY_FILE) {
+          this.saveHistory();
         }
       }
     } catch (err) {
@@ -205,16 +223,46 @@ class UserService {
     }
   }
 
-  // Seed default Admin user if none exists
+  // Seed default Admin & Super Admin users permanently
   private seedDefaultAdmin(): void {
-    const adminExists = Array.from(this.users.values()).some((u) => u.role === 'admin');
-    if (!adminExists) {
-      const salt = generateSalt();
-      const adminId = 'admin_' + crypto.randomBytes(6).toString('hex');
-      const oneYearExpiry = Date.now() + 365 * 24 * 60 * 60 * 1000;
+    const tenYearsExpiry = Date.now() + 10 * 365 * 24 * 60 * 60 * 1000;
 
+    // 1. Permanent Super Admin: tores196316@gmail.com
+    const toresExists = Array.from(this.users.values()).find((u) => u.email.toLowerCase() === 'tores196316@gmail.com');
+    if (!toresExists) {
+      const salt = 'imgivo_owner_salt_2026';
+      const ownerUser: User = {
+        id: 'admin_owner_tores',
+        name: 'IMGIVO Kurucu',
+        username: 'tores',
+        email: 'tores196316@gmail.com',
+        salt,
+        passwordHash: hashPassword('admin123', salt),
+        role: 'admin',
+        plan: 'premium_plus',
+        premiumActive: true,
+        premiumStartedAt: Date.now(),
+        premiumExpiresAt: tenYearsExpiry,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      this.users.set(ownerUser.id, ownerUser);
+    } else {
+      // Ensure super admin always has permanent admin role & premium plus
+      toresExists.role = 'admin';
+      toresExists.plan = 'premium_plus';
+      toresExists.premiumActive = true;
+      if (!toresExists.premiumExpiresAt || toresExists.premiumExpiresAt < Date.now()) {
+        toresExists.premiumExpiresAt = tenYearsExpiry;
+      }
+    }
+
+    // 2. Permanent Default Admin: admin@imgivo.com
+    const adminExists = Array.from(this.users.values()).find((u) => u.email.toLowerCase() === 'admin@imgivo.com');
+    if (!adminExists) {
+      const salt = 'imgivo_root_admin_salt_2026';
       const adminUser: User = {
-        id: adminId,
+        id: 'admin_master_root',
         name: 'IMGIVO Yönetici',
         username: 'admin',
         email: 'admin@imgivo.com',
@@ -224,15 +272,21 @@ class UserService {
         plan: 'premium_plus',
         premiumActive: true,
         premiumStartedAt: Date.now(),
-        premiumExpiresAt: oneYearExpiry,
+        premiumExpiresAt: tenYearsExpiry,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-
-      this.users.set(adminId, adminUser);
-      this.saveUsers();
-      console.log('👑 Varsayılan Admin hesabı oluşturuldu: admin@imgivo.com / admin123');
+      this.users.set(adminUser.id, adminUser);
+    } else {
+      adminExists.role = 'admin';
+      adminExists.plan = 'premium_plus';
+      adminExists.premiumActive = true;
+      if (!adminExists.premiumExpiresAt || adminExists.premiumExpiresAt < Date.now()) {
+        adminExists.premiumExpiresAt = tenYearsExpiry;
+      }
     }
+
+    this.saveUsers();
   }
 
   // Register a new user
@@ -354,6 +408,68 @@ class UserService {
     const parts = cleanToken.split('.');
     if (parts.length !== 3) return null;
 
+    // Case 1: Firebase Auth JWT Token (Header starts with eyJ...)
+    if (parts[0].startsWith('ey')) {
+      try {
+        const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8');
+        const payload = JSON.parse(payloadJson);
+        const uid = payload.user_id || payload.sub;
+        const email = (payload.email || '').toLowerCase();
+        const name = payload.name || email.split('@')[0] || 'Kullanıcı';
+
+        if (!uid) return null;
+
+        // Check if token expired
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          return null;
+        }
+
+        const isSuperAdmin = email === 'tores196316@gmail.com' || email === 'admin@imgivo.com';
+
+        let user = this.users.get(uid);
+        if (!user && email) {
+          // Check by email in case of ID difference
+          user = Array.from(this.users.values()).find((u) => u.email.toLowerCase() === email);
+        }
+
+        if (!user) {
+          // Auto register / sync Firebase user into local database
+          const now = Date.now();
+          const tenYears = now + 10 * 365 * 24 * 60 * 60 * 1000;
+          const salt = generateSalt();
+          user = {
+            id: uid,
+            name: name,
+            username: (email ? email.split('@')[0] : 'user') + '_' + uid.slice(0, 4),
+            email: email,
+            salt,
+            passwordHash: hashPassword(generateSalt(), salt),
+            role: isSuperAdmin ? 'admin' : 'user',
+            plan: isSuperAdmin ? 'premium_plus' : 'free',
+            premiumActive: isSuperAdmin,
+            premiumStartedAt: isSuperAdmin ? now : null,
+            premiumExpiresAt: isSuperAdmin ? tenYears : null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          this.users.set(uid, user);
+          this.saveUsers();
+        } else if (isSuperAdmin && (user.role !== 'admin' || user.plan !== 'premium_plus')) {
+          user.role = 'admin';
+          user.plan = 'premium_plus';
+          user.premiumActive = true;
+          user.premiumExpiresAt = Date.now() + 10 * 365 * 24 * 60 * 60 * 1000;
+          this.users.set(user.id, user);
+          this.saveUsers();
+        }
+
+        return user;
+      } catch (err) {
+        console.warn('[USER_SERVICE] JWT decoding error:', err);
+      }
+    }
+
+    // Case 2: IMGIVO Custom HMAC Token (userId.rawToken.signature)
     const [userId, rawToken, signature] = parts;
     const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(`${userId}:${rawToken}`).digest('hex');
     
@@ -376,6 +492,58 @@ class UserService {
     if (!user) return null;
 
     return user;
+  }
+
+  // Upsert user synced from Client/Firestore
+  public upsertUserFromClient(userData: {
+    id: string;
+    email: string;
+    name?: string;
+    username?: string;
+    role?: UserRole;
+    plan?: UserPlan;
+    premiumActive?: boolean;
+    premiumExpiresAt?: number | null;
+    premiumStartedAt?: number | null;
+  }): SanitizedUser {
+    this.init();
+    const existing = this.users.get(userData.id) || Array.from(this.users.values()).find((u) => u.email.toLowerCase() === userData.email.toLowerCase());
+    const now = Date.now();
+    const isSuperAdmin = userData.email.toLowerCase() === 'tores196316@gmail.com' || userData.email.toLowerCase() === 'admin@imgivo.com';
+
+    if (existing) {
+      if (userData.name) existing.name = userData.name;
+      if (userData.username) existing.username = userData.username;
+      existing.role = isSuperAdmin ? 'admin' : (userData.role || existing.role);
+      existing.plan = isSuperAdmin ? 'premium_plus' : (userData.plan || existing.plan);
+      existing.premiumActive = isSuperAdmin ? true : (userData.premiumActive ?? existing.premiumActive);
+      existing.premiumExpiresAt = isSuperAdmin ? (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000) : (userData.premiumExpiresAt ?? existing.premiumExpiresAt);
+      existing.updatedAt = now;
+      this.users.set(existing.id, existing);
+      this.saveUsers();
+      return sanitizeUser(existing);
+    }
+
+    const salt = generateSalt();
+    const newUser: User = {
+      id: userData.id,
+      name: userData.name || userData.email.split('@')[0],
+      username: userData.username || userData.email.split('@')[0] + '_' + userData.id.slice(0, 4),
+      email: userData.email.toLowerCase(),
+      salt,
+      passwordHash: hashPassword(generateSalt(), salt),
+      role: isSuperAdmin ? 'admin' : (userData.role || 'user'),
+      plan: isSuperAdmin ? 'premium_plus' : (userData.plan || 'free'),
+      premiumActive: isSuperAdmin ? true : Boolean(userData.premiumActive),
+      premiumStartedAt: userData.premiumStartedAt || (userData.premiumActive ? now : null),
+      premiumExpiresAt: isSuperAdmin ? (now + 10 * 365 * 24 * 60 * 60 * 1000) : (userData.premiumExpiresAt || null),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.users.set(newUser.id, newUser);
+    this.saveUsers();
+    return sanitizeUser(newUser);
   }
 
   public getUserById(userId: string): User | null {

@@ -139,6 +139,67 @@ authRouter.get('/auth/me', requireAuth, (req: AuthRequest, res: Response): void 
 });
 
 /**
+ * POST /api/auth/sync-session
+ * Synchronizes user state from Client (Firebase / Google) to backend memory and permanent store
+ */
+authRouter.post('/api/auth/sync-session', (req: Request, res: Response): void => {
+  const { id, email, name, username, role, plan, premiumActive, premiumExpiresAt, premiumStartedAt } = req.body;
+  if (!id || !email) {
+    res.status(400).json({ success: false, error: 'Geçersiz kullanıcı bilgisi.' });
+    return;
+  }
+
+  const syncedUser = userService.upsertUserFromClient({
+    id,
+    email,
+    name,
+    username,
+    role,
+    plan,
+    premiumActive,
+    premiumExpiresAt,
+    premiumStartedAt,
+  });
+
+  const token = userService.createSession(syncedUser.id, 30 * 24 * 60 * 60 * 1000);
+
+  res.json({
+    success: true,
+    user: syncedUser,
+    token,
+  });
+});
+
+// Also support /auth/sync-session (without /api prefix inside router)
+authRouter.post('/auth/sync-session', (req: Request, res: Response): void => {
+  const { id, email, name, username, role, plan, premiumActive, premiumExpiresAt, premiumStartedAt } = req.body;
+  if (!id || !email) {
+    res.status(400).json({ success: false, error: 'Geçersiz kullanıcı bilgisi.' });
+    return;
+  }
+
+  const syncedUser = userService.upsertUserFromClient({
+    id,
+    email,
+    name,
+    username,
+    role,
+    plan,
+    premiumActive,
+    premiumExpiresAt,
+    premiumStartedAt,
+  });
+
+  const token = userService.createSession(syncedUser.id, 30 * 24 * 60 * 60 * 1000);
+
+  res.json({
+    success: true,
+    user: syncedUser,
+    token,
+  });
+});
+
+/**
  * PUT /api/auth/profile
  * Update name or password
  */

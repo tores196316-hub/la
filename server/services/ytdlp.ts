@@ -4,6 +4,7 @@ import fs from 'fs';
 import { findYtDlp, findFfmpeg } from './systemChecker.js';
 import { VideoMetadata, VideoFormatOption, MediaType } from '../types.js';
 import { sanitizeFileName } from '../utils/security.js';
+import { speedConfigService } from './speedConfig.js';
 
 /**
  * Formats duration seconds into readable time string (e.g. 03:45 or 01:12:30).
@@ -687,13 +688,30 @@ export async function downloadAndProcessMedia(options: DownloadMediaOptions): Pr
     '--output', outputTemplate,
   ];
 
-  // Free vs Premium Speed Throttling
-  if (!isPremium) {
-    // Standart Free users have a bandwidth throttle (~850 KB/s) for realistic tiers
-    args.push('--limit-rate', '850K');
+  // Dynamic Speed and Rate Throttling based on Plan & Admin Speed Settings
+  const speedSettings = speedConfigService.getSettings();
+
+  if (!isPremium || userPlan === 'free') {
+    // Free Tier Speed Control
+    if (speedSettings.freeSpeedLimitKbps > 0) {
+      args.push('--limit-rate', `${speedSettings.freeSpeedLimitKbps}K`);
+    }
   } else if (userPlan === 'premium_plus') {
-    // VIP Plus users get maximum concurrent fragments
-    args.push('--concurrent-fragments', '4');
+    // Premium Plus VIP Turbo
+    if (speedSettings.premiumPlusSpeedLimitKbps > 0) {
+      args.push('--limit-rate', `${speedSettings.premiumPlusSpeedLimitKbps}K`);
+    }
+    if (speedSettings.premiumPlusConcurrentFragments > 1) {
+      args.push('--concurrent-fragments', String(speedSettings.premiumPlusConcurrentFragments));
+    }
+  } else {
+    // Standard Premium
+    if (speedSettings.premiumSpeedLimitKbps > 0) {
+      args.push('--limit-rate', `${speedSettings.premiumSpeedLimitKbps}K`);
+    }
+    if (speedSettings.premiumConcurrentFragments > 1) {
+      args.push('--concurrent-fragments', String(speedSettings.premiumConcurrentFragments));
+    }
   }
 
   if (ffmpeg) {

@@ -567,3 +567,75 @@ export async function updatePricingSettingsInFirestore(pricing: {
     { merge: true }
   );
 }
+
+/**
+ * Real-time subscription to Speed & Queue Settings
+ */
+export function subscribeToSpeedSettings(
+  onUpdate: (speeds: {
+    freeSpeedLimitKbps: number;
+    freeQueueDelaySeconds: number;
+    premiumSpeedLimitKbps: number;
+    premiumConcurrentFragments: number;
+    premiumPlusSpeedLimitKbps: number;
+    premiumPlusConcurrentFragments: number;
+    updatedAt?: number;
+  }) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const settingsDocRef = doc(db, 'settings', 'speed');
+  return onSnapshot(
+    settingsDocRef,
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        onUpdate({
+          freeSpeedLimitKbps: typeof data.freeSpeedLimitKbps === 'number' ? data.freeSpeedLimitKbps : 3500,
+          freeQueueDelaySeconds: typeof data.freeQueueDelaySeconds === 'number' ? data.freeQueueDelaySeconds : 1,
+          premiumSpeedLimitKbps: typeof data.premiumSpeedLimitKbps === 'number' ? data.premiumSpeedLimitKbps : 0,
+          premiumConcurrentFragments: typeof data.premiumConcurrentFragments === 'number' ? data.premiumConcurrentFragments : 4,
+          premiumPlusSpeedLimitKbps: typeof data.premiumPlusSpeedLimitKbps === 'number' ? data.premiumPlusSpeedLimitKbps : 0,
+          premiumPlusConcurrentFragments: typeof data.premiumPlusConcurrentFragments === 'number' ? data.premiumPlusConcurrentFragments : 8,
+          updatedAt: data.updatedAt,
+        });
+      } else {
+        onUpdate({
+          freeSpeedLimitKbps: 3500,
+          freeQueueDelaySeconds: 1,
+          premiumSpeedLimitKbps: 0,
+          premiumConcurrentFragments: 4,
+          premiumPlusSpeedLimitKbps: 0,
+          premiumPlusConcurrentFragments: 8,
+        });
+      }
+    },
+    (err) => {
+      console.error('Speed settings subscription error:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Update speed settings in Firestore (Admin only)
+ */
+export async function updateSpeedSettingsInFirestore(speeds: {
+  freeSpeedLimitKbps: number;
+  freeQueueDelaySeconds: number;
+  premiumSpeedLimitKbps: number;
+  premiumConcurrentFragments: number;
+  premiumPlusSpeedLimitKbps: number;
+  premiumPlusConcurrentFragments: number;
+}): Promise<void> {
+  const settingsDocRef = doc(db, 'settings', 'speed');
+  await setDoc(
+    settingsDocRef,
+    {
+      ...speeds,
+      id: 'speed',
+      updatedAt: Date.now(),
+    },
+    { merge: true }
+  );
+}
+

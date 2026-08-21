@@ -108,10 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Firebase Auth state listener on boot
   useEffect(() => {
+    let isMounted = true;
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         try {
           const idToken = await fbUser.getIdToken();
+          if (!isMounted) return;
           setToken(idToken);
           localStorage.setItem(TOKEN_KEY, idToken);
 
@@ -121,11 +124,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           let appUser: User;
           const isBootstrapAdmin =
-            fbUser.email === 'admin@imgivo.com' || fbUser.email === 'tores196316@gmail.com';
+            fbUser.email?.toLowerCase() === 'admin@imgivo.com' ||
+            fbUser.email?.toLowerCase() === 'tores196316@gmail.com';
           const now = Date.now();
+          const tenYears = now + 10 * 365 * 24 * 60 * 60 * 1000;
 
           if (snap.exists()) {
-            appUser = mapFirestoreDocToUser(snap.data(), fbUser.uid);
+            const existingData = snap.data();
+            // If super admin, ensure they never lose admin / VIP status
+            if (isBootstrapAdmin && (existingData.role !== 'admin' || existingData.plan !== 'premium_plus')) {
+              const updatedSuperAdmin = {
+                ...existingData,
+                email: fbUser.email || existingData.email || '',
+                role: 'admin' as UserRole,
+                plan: 'premium_plus' as UserPlan,
+                premiumActive: true,
+                premiumExpiresAt: existingData.premiumExpiresAt && existingData.premiumExpiresAt > now ? existingData.premiumExpiresAt : tenYears,
+                updatedAt: now,
+              };
+              await saveUserToFirestore(fbUser.uid, updatedSuperAdmin);
+              appUser = mapFirestoreDocToUser(updatedSuperAdmin, fbUser.uid);
+            } else {
+              appUser = mapFirestoreDocToUser(existingData, fbUser.uid);
+            }
           } else {
             // Auto create doc if missing
             const initialDoc = {
@@ -137,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               plan: (isBootstrapAdmin ? 'premium_plus' : 'free') as UserPlan,
               premiumActive: isBootstrapAdmin,
               premiumStartedAt: isBootstrapAdmin ? now : null,
-              premiumExpiresAt: isBootstrapAdmin ? now + 365 * 24 * 60 * 60 * 1000 : null,
+              premiumExpiresAt: isBootstrapAdmin ? tenYears : null,
               createdAt: now,
               updatedAt: now,
             };
@@ -145,8 +166,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             appUser = mapFirestoreDocToUser(initialDoc, fbUser.uid);
           }
 
-          setUser(appUser);
-          localStorage.setItem(USER_CACHE_KEY, JSON.stringify(appUser));
+          if (isMounted) {
+            setUser(appUser);
+            localStorage.setItem(USER_CACHE_KEY, JSON.stringify(appUser));
+          }
+
+          // Sync to backend persistent store
+          fetch('/api/auth/sync-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(appUser),
+          }).catch(() => {});
 
           // Start live Firestore real-time onSnapshot synchronization
           attachUserRealtimeListener(fbUser.uid);
@@ -155,17 +185,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         stopSnapshotListener();
-        // If no firebase user, check if we have custom fallback or empty
-        if (!localStorage.getItem(TOKEN_KEY)) {
-          setUser(null);
-          setToken(null);
-          localStorage.removeItem(USER_CACHE_KEY);
+        // Check if there is a local session token to restore from backend
+        const savedToken = localStorage.getItem(TOKEN_KEY);
+        if (savedToken) {
+          try {
+            const meRes = await fetch('/api/auth/me', {
+              headers: { Authorization: `Bearer ${savedToken}` },
+            });
+            if (meRes.ok) {
+              const meData = await meRes.json();
+              if (meData.success && meData.user && isMounted) {
+                setUser(meData.user);
+                localStorage.setItem(USER_CACHE_KEY, JSON.stringify(meData.user));
+              }
+            } else {
+              // Token is invalid/expired
+              if (isMounted) {
+                setUser(null);
+                setToken(null);
+                localStorage.removeItem(TOKEN_KEY);
+                localStorage.removeItem(USER_CACHE_KEY);
+              }
+            }
+          } catch {
+            // Offline or backend start delay, keep cached user
+          }
+        } else {
+          if (isMounted) {
+            setUser(null);
+            setToken(null);
+            localStorage.removeItem(USER_CACHE_KEY);
+          }
         }
       }
-      setIsLoading(false);
+
+      if (isMounted) {
+        setIsLoading(false);
+      }
     });
 
     return () => {
+      isMounted = false;
       unsubscribeAuth();
       stopSnapshotListener();
     };
@@ -192,6 +252,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       const appUser = await signInWithGoogle();
       setUser(appUser);
+      try {
+        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(appUser));
+      } catch {}
+      fetch('/api/auth/sync-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appUser),
+      }).catch(() => {});
       attachUserRealtimeListener(appUser.id);
       return { success: true };
     } catch (err: any) {
@@ -223,6 +291,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const appUser = await signInWithEmail(email, password);
         setUser(appUser);
+        try {
+          localStorage.setItem(USER_CACHE_KEY, JSON.stringify(appUser));
+        } catch {}
+        fetch('/api/auth/sync-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(appUser),
+        }).catch(() => {});
         attachUserRealtimeListener(appUser.id);
         return { success: true };
       } catch (fbErr: any) {
@@ -295,6 +371,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const appUser = await signUpWithEmail(data.name, data.username, data.email, data.password);
         setUser(appUser);
+        try {
+          localStorage.setItem(USER_CACHE_KEY, JSON.stringify(appUser));
+        } catch {}
+        fetch('/api/auth/sync-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(appUser),
+        }).catch(() => {});
         attachUserRealtimeListener(appUser.id);
         return { success: true };
       } catch (fbErr: any) {

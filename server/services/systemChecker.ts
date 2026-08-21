@@ -23,6 +23,7 @@ let lastCheckTime = 0;
 export async function findYtDlp(): Promise<{ path: string; version: string } | null> {
   const candidatePaths = [
     process.env.YT_DLP_PATH,
+    '/app/applet/bin/yt-dlp',
     '/usr/local/bin/yt-dlp',
     '/usr/bin/yt-dlp',
     'yt-dlp',

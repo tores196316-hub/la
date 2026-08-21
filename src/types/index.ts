@@ -171,3 +171,22 @@ export const DEFAULT_PRICING: PricingSettings = {
   premiumPlusDiscountPercent: 25,
 };
 
+export interface SpeedSettings {
+  freeSpeedLimitKbps: number; // 0 = Sınırsız, veya 2000, 3500, 5000 vb. (KB/s)
+  freeQueueDelaySeconds: number; // 0 = Anında, veya 1, 2, 3, 5 saniye
+  premiumSpeedLimitKbps: number; // 0 = Sınırsız
+  premiumConcurrentFragments: number; // 1 to 16 (Örn: 4)
+  premiumPlusSpeedLimitKbps: number; // 0 = Sınırsız
+  premiumPlusConcurrentFragments: number; // 1 to 32 (Örn: 8)
+  updatedAt?: number;
+}
+
+export const DEFAULT_SPEED_SETTINGS: SpeedSettings = {
+  freeSpeedLimitKbps: 3500, // 3.5 MB/s (Hızlı ve stabil)
+  freeQueueDelaySeconds: 1, // 1 saniyelik hafif bekleme
+  premiumSpeedLimitKbps: 0, // Sınırsız
+  premiumConcurrentFragments: 4, // 4 eşzamanlı parça
+  premiumPlusSpeedLimitKbps: 0, // Sınırsız Turbo
+  premiumPlusConcurrentFragments: 8, // 8 eşzamanlı parça
+};
+

@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { ConversionJob, JobState, JobProgress, AdminStats, MediaType } from '../types.js';
 import { downloadAndProcessMedia } from './ytdlp.js';
 import { getSystemDiagnostic } from './systemChecker.js';
+import { speedConfigService } from './speedConfig.js';
 
 const TEMP_DIR = path.resolve(process.cwd(), 'tmp', 'downloads');
 const JOB_EXPIRATION_MS = (parseInt(process.env.JOB_EXPIRATION_MINUTES || '30', 10)) * 60 * 1000;
@@ -113,10 +114,13 @@ class JobManager {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
-    // Standard Free Tier Queue Throttle (Simulation: 4.5s queue delay with status updates)
-    if (!job.isPremium) {
-      // Step 1: Queue position #3
-      await new Promise((r) => setTimeout(r, 2200));
+    // Standard Free Tier Queue Throttle (Simulation: Configurable queue delay with status updates)
+    const speedSettings = speedConfigService.getSettings();
+    if (!job.isPremium && speedSettings.freeQueueDelaySeconds > 0) {
+      const halfDelay = (speedSettings.freeQueueDelaySeconds * 1000) / 2;
+      
+      // Step 1: Queue position #2 or #1
+      await new Promise((r) => setTimeout(r, halfDelay));
       const jobStep1 = this.jobs.get(jobId);
       if (!jobStep1 || jobStep1.state === 'failed') return;
       jobStep1.progress = {
@@ -127,8 +131,8 @@ class JobManager {
       };
       jobStep1.updatedAt = Date.now();
 
-      // Step 2: Queue position #1
-      await new Promise((r) => setTimeout(r, 2000));
+      // Step 2: Finalize queue wait
+      await new Promise((r) => setTimeout(r, halfDelay));
       const jobStep2 = this.jobs.get(jobId);
       if (!jobStep2 || jobStep2.state === 'failed') return;
     }

@@ -7,6 +7,7 @@ import { isValidYouTubeUrl, extractYouTubeVideoId, getCanonicalYouTubeUrl, sanit
 import { jobManager } from '../server/services/jobManager.js';
 import { getSystemDiagnostic } from '../server/services/systemChecker.js';
 import { extractAvailableResolutions, getResolvedCookiePath, buildBaseYtDlpArgs } from '../server/services/ytdlp.js';
+import { speedConfigService } from '../server/services/speedConfig.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -191,6 +192,22 @@ async function runTests() {
   assert(premiumJob.userPlan === 'premium', 'Premium kullanıcı planı doğru atandı');
   assert(premiumJob.isPremium === true, 'Premium kullanıcı için isPremium true olarak işaretlendi');
   assert(premiumJob.progress.queuePosition === 0, 'Premium kullanıcı için kuyruk beklemesi 0 (anında)');
+
+  console.log('\n[9] Admin İndirme Hızları ve Kuyruk Yönetimi Testleri');
+  const defaultSpeeds = speedConfigService.getSettings();
+  assert(typeof defaultSpeeds.freeSpeedLimitKbps === 'number', 'Free hız limiti varsayılan değeri mevcut');
+  assert(typeof defaultSpeeds.freeQueueDelaySeconds === 'number', 'Free kuyruk bekleme süresi mevcut');
+  
+  const updatedSpeeds = speedConfigService.updateSettings({
+    freeSpeedLimitKbps: 4500,
+    freeQueueDelaySeconds: 2,
+    premiumConcurrentFragments: 6,
+    premiumPlusConcurrentFragments: 12,
+  });
+  assert(updatedSpeeds.freeSpeedLimitKbps === 4500, 'Free hız limiti dinamik güncellendi (4.5 MB/s)');
+  assert(updatedSpeeds.freeQueueDelaySeconds === 2, 'Free kuyruk bekleme süresi dinamik güncellendi (2s)');
+  assert(updatedSpeeds.premiumConcurrentFragments === 6, 'Premium parça sayısı 6 olarak güncellendi');
+  assert(updatedSpeeds.premiumPlusConcurrentFragments === 12, 'VIP Plus parça sayısı 12 olarak güncellendi');
 
   console.log(`\n========================================`);
   console.log(`📊 Test Sonuçları: ${passed} Başarılı, ${failed} Başarısız`);

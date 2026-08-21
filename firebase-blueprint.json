@@ -176,6 +176,47 @@
         }
       },
       "required": ["id", "premiumMonthly", "premiumDiscountPercent", "premiumPlusMonthly", "premiumPlusDiscountPercent"]
+    },
+    "SpeedSettings": {
+      "title": "SpeedSettings",
+      "description": "Dynamic speed limit and queue configuration for Free and Premium tiers",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document ID, usually 'speed'",
+          "maxLength": 64
+        },
+        "freeSpeedLimitKbps": {
+          "type": "number",
+          "description": "Free plan download speed limit in KB/s (0 = unlimited)"
+        },
+        "freeQueueDelaySeconds": {
+          "type": "number",
+          "description": "Free plan artificial queue delay in seconds"
+        },
+        "premiumSpeedLimitKbps": {
+          "type": "number",
+          "description": "Premium plan download speed limit in KB/s (0 = unlimited)"
+        },
+        "premiumConcurrentFragments": {
+          "type": "number",
+          "description": "Premium plan parallel fragments"
+        },
+        "premiumPlusSpeedLimitKbps": {
+          "type": "number",
+          "description": "Premium Plus plan download speed limit in KB/s (0 = unlimited)"
+        },
+        "premiumPlusConcurrentFragments": {
+          "type": "number",
+          "description": "Premium Plus plan parallel fragments"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Last updated timestamp"
+        }
+      },
+      "required": ["id", "freeSpeedLimitKbps", "freeQueueDelaySeconds", "premiumSpeedLimitKbps", "premiumConcurrentFragments", "premiumPlusSpeedLimitKbps", "premiumPlusConcurrentFragments"]
     }
   },
   "firestore": {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
-import { User, AdminDashboardData, UserRole, UserPlan, PricingSettings, DEFAULT_PRICING } from '../types';
+import { User, AdminDashboardData, UserRole, UserPlan, PricingSettings, DEFAULT_PRICING, SpeedSettings, DEFAULT_SPEED_SETTINGS } from '../types';
 import {
   Shield,
   Users,
@@ -27,12 +27,19 @@ import {
   Sparkles,
   Percent,
   TrendingDown,
+  Gauge,
+  Sliders,
+  DownloadCloud,
+  Cpu,
+  FastForward,
 } from 'lucide-react';
 import {
   subscribeToAllUsers,
   saveUserToFirestore,
   subscribeToPricingSettings,
   updatePricingSettingsInFirestore,
+  subscribeToSpeedSettings,
+  updateSpeedSettingsInFirestore,
 } from '../firebase/firebase';
 
 export function AdminPage() {
@@ -54,6 +61,17 @@ export function AdminPage() {
   const [plusDiscountInput, setPlusDiscountInput] = useState<number>(DEFAULT_PRICING.premiumPlusDiscountPercent);
   const [isSavingPricing, setIsSavingPricing] = useState(false);
   const [pricingSavedToast, setPricingSavedToast] = useState(false);
+
+  // Download Speed & Queue State
+  const [speedSettings, setSpeedSettings] = useState<SpeedSettings>(DEFAULT_SPEED_SETTINGS);
+  const [freeSpeedInput, setFreeSpeedInput] = useState<number>(DEFAULT_SPEED_SETTINGS.freeSpeedLimitKbps);
+  const [freeQueueDelayInput, setFreeQueueDelayInput] = useState<number>(DEFAULT_SPEED_SETTINGS.freeQueueDelaySeconds);
+  const [premiumSpeedInput, setPremiumSpeedInput] = useState<number>(DEFAULT_SPEED_SETTINGS.premiumSpeedLimitKbps);
+  const [premiumFragmentsInput, setPremiumFragmentsInput] = useState<number>(DEFAULT_SPEED_SETTINGS.premiumConcurrentFragments);
+  const [plusSpeedInput, setPlusSpeedInput] = useState<number>(DEFAULT_SPEED_SETTINGS.premiumPlusSpeedLimitKbps);
+  const [plusFragmentsInput, setPlusFragmentsInput] = useState<number>(DEFAULT_SPEED_SETTINGS.premiumPlusConcurrentFragments);
+  const [isSavingSpeed, setIsSavingSpeed] = useState(false);
+  const [speedSavedToast, setSpeedSavedToast] = useState(false);
 
   // Modal states
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -110,13 +128,37 @@ export function AdminPage() {
       setPlusDiscountInput(livePricing.premiumPlusDiscountPercent);
     });
 
-    // Also fetch backend stats (FFmpeg, yt-dlp, conversion logs)
+    const unsubscribeSpeed = subscribeToSpeedSettings((liveSpeeds) => {
+      setSpeedSettings(liveSpeeds);
+      setFreeSpeedInput(liveSpeeds.freeSpeedLimitKbps);
+      setFreeQueueDelayInput(liveSpeeds.freeQueueDelaySeconds);
+      setPremiumSpeedInput(liveSpeeds.premiumSpeedLimitKbps);
+      setPremiumFragmentsInput(liveSpeeds.premiumConcurrentFragments);
+      setPlusSpeedInput(liveSpeeds.premiumPlusSpeedLimitKbps);
+      setPlusFragmentsInput(liveSpeeds.premiumPlusConcurrentFragments);
+    });
+
+    // Also fetch backend stats (FFmpeg, yt-dlp, conversion logs, speeds)
     const fetchBackendStats = async () => {
       try {
         const res = await authFetch('/api/admin/dashboard');
         if (res.ok) {
           const dData = await res.json();
           if (dData.success) setDashboardData(dData.data);
+        }
+
+        const speedRes = await authFetch('/api/admin/speed-settings');
+        if (speedRes.ok) {
+          const sData = await speedRes.json();
+          if (sData.success && sData.data) {
+            setSpeedSettings(sData.data);
+            setFreeSpeedInput(sData.data.freeSpeedLimitKbps);
+            setFreeQueueDelayInput(sData.data.freeQueueDelaySeconds);
+            setPremiumSpeedInput(sData.data.premiumSpeedLimitKbps);
+            setPremiumFragmentsInput(sData.data.premiumConcurrentFragments);
+            setPlusSpeedInput(sData.data.premiumPlusSpeedLimitKbps);
+            setPlusFragmentsInput(sData.data.premiumPlusConcurrentFragments);
+          }
         }
       } catch (err) {
         console.error('Backend stats error:', err);
@@ -128,6 +170,7 @@ export function AdminPage() {
     return () => {
       unsubscribeUsers();
       unsubscribePricing();
+      unsubscribeSpeed();
     };
   }, [isAdmin, authFetch]);
 
@@ -158,6 +201,38 @@ export function AdminPage() {
       alert('Fiyatlar güncellenirken hata oluştu: ' + err.message);
     } finally {
       setIsSavingPricing(false);
+    }
+  };
+
+  const handleSaveSpeed = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSpeed(true);
+    try {
+      const payload = {
+        freeSpeedLimitKbps: Number(freeSpeedInput) || 0,
+        freeQueueDelaySeconds: Number(freeQueueDelayInput) || 0,
+        premiumSpeedLimitKbps: Number(premiumSpeedInput) || 0,
+        premiumConcurrentFragments: Number(premiumFragmentsInput) || 4,
+        premiumPlusSpeedLimitKbps: Number(plusSpeedInput) || 0,
+        premiumPlusConcurrentFragments: Number(plusFragmentsInput) || 8,
+      };
+
+      // 1. Update Firestore
+      await updateSpeedSettingsInFirestore(payload);
+
+      // 2. Update Backend Express Server
+      await authFetch('/api/admin/speed-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      setSpeedSavedToast(true);
+      setTimeout(() => setSpeedSavedToast(false), 3000);
+    } catch (err: any) {
+      alert('Hız ayarları güncellenirken hata oluştu: ' + err.message);
+    } finally {
+      setIsSavingSpeed(false);
     }
   };
 
@@ -577,6 +652,313 @@ export function AdminPage() {
             >
               <Save className="w-4 h-4" />
               <span>{isSavingPricing ? 'Kaydediliyor...' : 'Fiyat Değişikliklerini Canlıya Al'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Dynamic Speed Limits & Queue Management Card */}
+      <div className="rounded-2xl bg-[#0e1017] border border-cyan-500/30 p-5 sm:p-6 space-y-5 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+              <Gauge className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-white">İndirme Hızları & Kuyruk Yönetimi</h2>
+                <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[10px] font-bold">
+                  CANLI YT-DLP VE SUNUCU KONTROLÜ
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Free kullanıcıların indirme hızını, kuyruk bekleme süresini ve Premium / VIP Turbo hız parametrelerini canlı ayarlayın.
+              </p>
+            </div>
+          </div>
+
+          {speedSavedToast && (
+            <div className="px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+              <span>Hız Ayarları Başarıyla Güncellendi!</span>
+            </div>
+          )}
+        </div>
+
+        {/* Quick Presets */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
+          <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1 mr-1">
+            <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+            Hızlı Şablonlar:
+          </span>
+
+          <button
+            type="button"
+            onClick={() => {
+              setFreeSpeedInput(0);
+              setFreeQueueDelayInput(0);
+              setPremiumSpeedInput(0);
+              setPremiumFragmentsInput(6);
+              setPlusSpeedInput(0);
+              setPlusFragmentsInput(12);
+            }}
+            className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-[11px] font-medium text-emerald-300 transition-colors"
+          >
+            ⚡ Herkese Maksimum Hız (Sınırsız & 0s Kuyruk)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setFreeSpeedInput(3500);
+              setFreeQueueDelayInput(1);
+              setPremiumSpeedInput(0);
+              setPremiumFragmentsInput(4);
+              setPlusSpeedInput(0);
+              setPlusFragmentsInput(8);
+            }}
+            className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-[11px] font-medium text-cyan-300 transition-colors"
+          >
+            ⚖️ Dengeli Hızlı Mod (Free 3.5 MB/s, 1s Kuyruk - Önerilen)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setFreeSpeedInput(1500);
+              setFreeQueueDelayInput(3);
+              setPremiumSpeedInput(0);
+              setPremiumFragmentsInput(4);
+              setPlusSpeedInput(0);
+              setPlusFragmentsInput(10);
+            }}
+            className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-[11px] font-medium text-amber-300 transition-colors"
+          >
+            👑 Premium Teşvik Modu (Free 1.5 MB/s, 3s Kuyruk)
+          </button>
+        </div>
+
+        <form onSubmit={handleSaveSpeed} className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {/* Free Tier Speed Box */}
+            <div className="p-4 sm:p-5 rounded-xl bg-[#07080b] border border-slate-700/50 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <DownloadCloud className="w-4 h-4 text-slate-400" />
+                  <span className="text-sm font-bold text-white">Standart Free (Ücretsiz)</span>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                  Temel Üyeler
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Hız Limiti (KB/s)</label>
+                    <span className="text-[10px] text-cyan-400 font-mono">
+                      {freeSpeedInput === 0 ? 'Sınırsız (Tam Hız)' : `${(freeSpeedInput / 1000).toFixed(1)} MB/s`}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100000}
+                      step={250}
+                      value={freeSpeedInput}
+                      onChange={(e) => setFreeSpeedInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-full pl-3 pr-12 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-cyan-400"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-[11px]">KB/s</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setFreeSpeedInput(0)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${freeSpeedInput === 0 ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'bg-white/[0.05] text-slate-400 hover:text-white'}`}
+                    >
+                      Sınırsız (0)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFreeSpeedInput(5000)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${freeSpeedInput === 5000 ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'bg-white/[0.05] text-slate-400 hover:text-white'}`}
+                    >
+                      5 MB/s
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFreeSpeedInput(3500)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${freeSpeedInput === 3500 ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'bg-white/[0.05] text-slate-400 hover:text-white'}`}
+                    >
+                      3.5 MB/s
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFreeSpeedInput(2000)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${freeSpeedInput === 2000 ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'bg-white/[0.05] text-slate-400 hover:text-white'}`}
+                    >
+                      2 MB/s
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Kuyruk Bekleme Süresi</label>
+                    <span className="text-[10px] text-amber-300 font-mono">
+                      {freeQueueDelayInput === 0 ? '0 sn (Anında)' : `${freeQueueDelayInput} saniye`}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      value={freeQueueDelayInput}
+                      onChange={(e) => setFreeQueueDelayInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-full pl-3 pr-14 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-cyan-400"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-[11px]">Saniye</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    0 saniye yaparsanız free kullanıcılar hiç beklemeden anında indirmeye başlar.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Standard Premium Tier Speed Box */}
+            <div className="p-4 sm:p-5 rounded-xl bg-[#07080b] border border-amber-400/20 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm font-bold text-white">IMGIVO Premium</span>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-400/10 text-amber-300">
+                  VIP Hızlı Hat
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Hız Limiti (KB/s)</label>
+                    <span className="text-[10px] text-emerald-400 font-mono">
+                      {premiumSpeedInput === 0 ? 'Sınırsız (Maksimum)' : `${(premiumSpeedInput / 1000).toFixed(1)} MB/s`}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100000}
+                      step={500}
+                      value={premiumSpeedInput}
+                      onChange={(e) => setPremiumSpeedInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-full pl-3 pr-12 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-[11px]">KB/s</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">0 bırakırsanız bant genişliği sınırı konmaz.</p>
+                </div>
+
+                <div className="space-y-1 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Eşzamanlı Parça (Fragments)</label>
+                    <span className="text-[10px] text-amber-300 font-mono">{premiumFragmentsInput}x Paralel</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={1}
+                      max={16}
+                      value={premiumFragmentsInput}
+                      onChange={(e) => setPremiumFragmentsInput(Math.max(1, Math.min(16, parseInt(e.target.value, 10) || 1)))}
+                      className="w-full pl-3 pr-12 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-[11px]">Parça</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Aynı anda çoklu bağlantı açarak videoyu parçalar halinde çok daha hızlı çeker.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Premium Plus (VIP) Speed Box */}
+            <div className="p-4 sm:p-5 rounded-xl bg-[#07080b] border border-purple-500/20 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm font-bold text-white">Premium Plus (VIP)</span>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300">
+                  Ultra Turbo 4K
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Hız Limiti (KB/s)</label>
+                    <span className="text-[10px] text-purple-300 font-mono">
+                      {plusSpeedInput === 0 ? 'Sınırsız Ultra Turbo' : `${(plusSpeedInput / 1000).toFixed(1)} MB/s`}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100000}
+                      step={500}
+                      value={plusSpeedInput}
+                      onChange={(e) => setPlusSpeedInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-full pl-3 pr-12 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-purple-400"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-[11px]">KB/s</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">0 = Maksimum donanımsal bant genişliği.</p>
+                </div>
+
+                <div className="space-y-1 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Eşzamanlı Parça (Fragments)</label>
+                    <span className="text-[10px] text-purple-300 font-mono">{plusFragmentsInput}x Ultra Turbo</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={1}
+                      max={32}
+                      value={plusFragmentsInput}
+                      onChange={(e) => setPlusFragmentsInput(Math.max(1, Math.min(32, parseInt(e.target.value, 10) || 1)))}
+                      className="w-full pl-3 pr-12 py-2 rounded-lg bg-[#12151f] border border-white/[0.1] text-xs font-mono font-bold text-white focus:outline-none focus:border-purple-400"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-[11px]">Parça</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Özellikle 4K ve 2K videoları ışık hızında indirmek için çoklu akış kanalı açar.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+              <FastForward className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Ayarları kaydettiğiniz an tüm yeni indirmelerde bu hız ve kuyruk parametreleri doğrudan devreye girer.</span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSavingSpeed}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-black font-bold text-xs transition-all shadow-lg shadow-cyan-500/10 flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSavingSpeed ? 'Kaydediliyor...' : 'Hız Ayarlarını Canlıya Al'}</span>
             </button>
           </div>
         </form>

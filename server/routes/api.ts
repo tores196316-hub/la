@@ -8,6 +8,7 @@ import { getFastYouTubeMetadata } from '../services/fastMeta.js';
 import { jobManager } from '../services/jobManager.js';
 import { getSystemDiagnostic } from '../services/systemChecker.js';
 import { userService } from '../services/userService.js';
+import { speedConfigService } from '../services/speedConfig.js';
 
 export const apiRouter = Router();
 
@@ -398,6 +399,48 @@ apiRouter.post('/admin/cookies', (req: Request, res: Response): void => {
       error: result.message,
     });
   }
+});
+
+/**
+ * GET /api/admin/speed-settings
+ * Returns current download speed and queue settings
+ */
+apiRouter.get('/admin/speed-settings', (_req: Request, res: Response): void => {
+  const settings = speedConfigService.getSettings();
+  res.json({
+    success: true,
+    data: settings,
+  });
+});
+
+/**
+ * POST /api/admin/speed-settings
+ * Updates download speed and queue settings
+ */
+apiRouter.post('/admin/speed-settings', (req: Request, res: Response): void => {
+  const {
+    freeSpeedLimitKbps,
+    freeQueueDelaySeconds,
+    premiumSpeedLimitKbps,
+    premiumConcurrentFragments,
+    premiumPlusSpeedLimitKbps,
+    premiumPlusConcurrentFragments,
+  } = req.body;
+
+  const updated = speedConfigService.updateSettings({
+    freeSpeedLimitKbps: typeof freeSpeedLimitKbps === 'number' ? Math.max(0, freeSpeedLimitKbps) : undefined,
+    freeQueueDelaySeconds: typeof freeQueueDelaySeconds === 'number' ? Math.max(0, freeQueueDelaySeconds) : undefined,
+    premiumSpeedLimitKbps: typeof premiumSpeedLimitKbps === 'number' ? Math.max(0, premiumSpeedLimitKbps) : undefined,
+    premiumConcurrentFragments: typeof premiumConcurrentFragments === 'number' ? Math.max(1, Math.min(16, premiumConcurrentFragments)) : undefined,
+    premiumPlusSpeedLimitKbps: typeof premiumPlusSpeedLimitKbps === 'number' ? Math.max(0, premiumPlusSpeedLimitKbps) : undefined,
+    premiumPlusConcurrentFragments: typeof premiumPlusConcurrentFragments === 'number' ? Math.max(1, Math.min(32, premiumPlusConcurrentFragments)) : undefined,
+  });
+
+  res.json({
+    success: true,
+    data: updated,
+    message: 'İndirme hız ve kuyruk ayarları başarıyla güncellendi.',
+  });
 });
 
 /**

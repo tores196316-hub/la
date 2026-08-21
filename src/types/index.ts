@@ -129,6 +129,9 @@ export interface User {
   premiumExpiresAt: number | null;
   remainingDays: number | null;
   remainingFormatted: string;
+  disabled?: boolean;
+  totalDownloads?: number;
+  lastActiveAt?: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -147,6 +150,7 @@ export interface AdminDashboardData {
     today: number;
     activeJobs: number;
     formatPopularity: Record<string, number>;
+    recentJobs?: any[];
   };
   system: {
     ytdlpVersion: string | null;

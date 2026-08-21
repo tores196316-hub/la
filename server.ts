@@ -62,6 +62,14 @@ app.use('/api', limiter);
 app.use('/api', authRouter);
 app.use('/api', apiRouter);
 
+// Fallback 404 for unhandled API endpoints to prevent serving SPA HTML
+app.use('/api', (_req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'İstenen API adresi bulunamadı.',
+  });
+});
+
 // Setup frontend serving
 async function setupFrontend() {
   if (!isProd) {

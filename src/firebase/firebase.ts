@@ -149,6 +149,9 @@ export function mapFirestoreDocToUser(docData: any, docId: string): User {
     premiumExpiresAt: expiresAt,
     remainingDays: calc.remainingDays,
     remainingFormatted: calc.formatted,
+    disabled: Boolean(docData.disabled),
+    totalDownloads: typeof docData.totalDownloads === 'number' ? docData.totalDownloads : 0,
+    lastActiveAt: docData.lastActiveAt || docData.updatedAt || null,
     createdAt: docData.createdAt || Date.now(),
     updatedAt: docData.updatedAt || Date.now(),
   };
@@ -354,6 +357,24 @@ export async function adminSetUserRoleInFirestore(
 export async function adminDeleteUserInFirestore(targetUserId: string): Promise<void> {
   const userRef = doc(db, 'users', targetUserId);
   await deleteDoc(userRef);
+}
+
+/**
+ * Admin: Toggle User Disabled / Active status
+ */
+export async function adminToggleUserDisabledInFirestore(
+  targetUserId: string,
+  disabled: boolean
+): Promise<void> {
+  const userRef = doc(db, 'users', targetUserId);
+  await setDoc(
+    userRef,
+    {
+      disabled,
+      updatedAt: Date.now(),
+    },
+    { merge: true }
+  );
 }
 
 /**

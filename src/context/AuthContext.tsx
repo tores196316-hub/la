@@ -19,6 +19,7 @@ import {
   adminSetUserPremiumInFirestore,
   adminSetUserRoleInFirestore,
   adminDeleteUserInFirestore,
+  adminToggleUserDisabledInFirestore,
   saveUserToFirestore,
   formatRemainingTime,
   mapFirestoreDocToUser,
@@ -44,6 +45,7 @@ interface AuthContextType {
   adminSetPremium: (userId: string, options: { plan?: UserPlan; months?: number; years?: number; days?: number; cancel?: boolean }) => Promise<void>;
   adminSetRole: (userId: string, role: UserRole) => Promise<void>;
   adminDeleteUser: (userId: string) => Promise<void>;
+  adminToggleDisabled: (userId: string, disabled: boolean) => Promise<void>;
   authFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
@@ -235,8 +237,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authFetch = useCallback(
     async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const headers = new Headers(init?.headers || {});
-      if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
+      let authToken = token;
+      if (!authToken && auth.currentUser) {
+        try {
+          authToken = await auth.currentUser.getIdToken();
+        } catch {}
+      }
+      if (authToken) {
+        headers.set('Authorization', `Bearer ${authToken}`);
       }
       return fetch(input, {
         ...init,
@@ -522,6 +530,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Admin: Toggle User Disabled Status
+  const adminToggleDisabled = async (targetUserId: string, disabled: boolean) => {
+    await adminToggleUserDisabledInFirestore(targetUserId, disabled);
+  };
+
   const isPremium = Boolean(user && user.plan !== 'free' && user.premiumActive);
   const isAdmin = Boolean(user && (user.role === 'admin' || user.email === 'tores196316@gmail.com' || user.email === 'admin@imgivo.com'));
 
@@ -542,6 +555,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         adminSetPremium,
         adminSetRole,
         adminDeleteUser,
+        adminToggleDisabled,
         authFetch,
       }}
     >

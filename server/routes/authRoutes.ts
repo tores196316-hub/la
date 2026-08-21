@@ -299,6 +299,7 @@ authRouter.delete('/user/history', requireAuth, (req: AuthRequest, res: Response
 authRouter.get('/admin/dashboard', requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   const userStats = userService.getAdminDashboardStats();
   const conversionStats = await jobManager.getAdminStats();
+  const recentJobs = jobManager.getRecentHistory(50);
 
   res.json({
     success: true,
@@ -311,6 +312,7 @@ authRouter.get('/admin/dashboard', requireAdmin, async (_req: AuthRequest, res: 
         today: conversionStats.todayConversions,
         activeJobs: conversionStats.activeJobs,
         formatPopularity: conversionStats.formatPopularity,
+        recentJobs,
       },
       system: conversionStats.system,
     },

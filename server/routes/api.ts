@@ -301,27 +301,32 @@ apiRouter.get('/download/:jobId', (req: Request, res: Response): void => {
 });
 
 /**
- * GET /api/health
- * Health check endpoint as required by spec
+ * GET /api/health & /api/system/diagnostic
+ * Health check & diagnostic endpoint as required by spec
  */
-apiRouter.get('/health', async (_req: Request, res: Response): Promise<void> => {
-  const diag = await getSystemDiagnostic();
+apiRouter.get(['/health', '/system/diagnostic', '/system-diagnostic'], async (_req: Request, res: Response): Promise<void> => {
+  const diag = await getSystemDiagnostic(true);
   res.json({
+    success: true,
     status: 'ok',
     service: 'imgivo-converter',
     dependencies: {
       ytdlp: {
         available: diag.ytdlpFound,
         version: diag.ytdlpVersion,
+        path: diag.ytdlpPath,
       },
       ffmpeg: {
         available: diag.ffmpegFound,
         version: diag.ffmpegVersion,
+        path: diag.ffmpegPath,
       },
       storage: {
         writable: diag.tempDirWritable,
+        tempDir: diag.tempDir,
       },
     },
+    system: diag,
     timestamp: new Date().toISOString(),
   });
 });
